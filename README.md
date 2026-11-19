@@ -65,7 +65,7 @@
 | 直接在 Windows 上用 | [GitHub Releases](https://github.com/mmax911110-lgtm/SomePhylloscopus/releases) 里的「Windows NVIDIA 便携版」链接 | 完整运行包，含 `柳莺识别.exe`、图鉴素材、识别权重和配套运行库。 |
 | 看代码或自己改 | GitHub **Code → Download ZIP** 或克隆仓库 | 源码、发布配置、文档和截图。想跑完整推理还得配对应版本的便携包。 |
 
-首个公开下载地址待发布，正式发版时对照 Release 标题看版本号。GitHub 自动生成的 `Source code (zip)` 和 `Source code (tar.gz)` 里也只有源码。[GitHub Releases 说明](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)
+在 Release 页面下载 `Download-Windows-NVIDIA.cmd`，双击运行。它会下载四个分件、逐件校验，再生成一个完整 ZIP 并核对整包 SHA-256。GitHub 自动生成的 `Source code (zip)` 和 `Source code (tar.gz)` 包含仓库源码。[GitHub Releases 说明](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)
 
 ### 电脑要求
 
@@ -205,7 +205,7 @@ GitHub 仓库只放源码。光 BioCLIP 2.5 单个权重就有约 **3.67 GiB**�
 | 启动与识别 | 带齐同版本的启动器、程序、运行库、基础权重、专项权重、标签和识别配置。 |
 | 初始档案 | 清空发行副本里 `data/`、`results/`、`logs/`、`cache/` 的内容，让程序按需新建空档案和运行目录。 |
 | 个人封面与路径 | 清掉 `assets/user_heroes/` 里的个人照片，重置 `config/hero_gallery.json`，把 `config/settings.json` 改成包内 `NVIDIA` 的相对路径。 |
-| 素材与许可 | 按授权范围决定放进公开包的素材。参考折页单独核对分发权限，随包照片、录音、字体、模型和运行库保留各自署名与许可。[数据与素材来源](docs/sources/data-sources.md) |
+| 素材与许可 | 随包保留辨识折页和来源说明。照片、录音、字体、模型和运行库各自保留署名与许可。[数据与素材来源](docs/sources/data-sources.md) |
 | 版本与复测 | 对齐 `config/release.json` 的版本和 Release 标签。换个路径解压副本，确认能正常启动、初始档案为空，且已知来源照片能跑完推理。[项目发布说明](docs/GitHub发布与版本检查.md) |
 
 软件里的「版本与更新」会读仓库最新的正式 Release 信息，便携包的下载和校验在 Release 页面看。

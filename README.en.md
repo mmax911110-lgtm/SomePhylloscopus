@@ -65,7 +65,7 @@ To give the home screen some life, we let the little leaf warbler out from besid
 | Run the app on Windows | **Windows NVIDIA portable edition** on [GitHub Releases](https://github.com/mmax911110-lgtm/SomePhylloscopus/releases) | The complete app, including `柳莺识别.exe`, field-guide media, model weights, and runtime libraries. |
 | Read or modify the code | **Code → Download ZIP**, or clone the repository | Source code, release configuration, documentation, and screenshots. Full inference requires the corresponding portable edition. |
 
-The first public download is pending. Check the version in the release title. The automatically generated **Source code (zip)** and **Source code (tar.gz)** archives contain the repository source. [GitHub Releases documentation](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)
+Download `Download-Windows-NVIDIA.cmd` from the release page and double-click it. It downloads and verifies four parts, assembles the complete ZIP, and checks its SHA-256. The automatically generated **Source code (zip)** and **Source code (tar.gz)** archives contain the repository source. [GitHub Releases documentation](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)
 
 ### System requirements
 
@@ -201,7 +201,7 @@ Make a clean distribution copy of the app to keep your personal records in your 
 | Startup and identification | Include matching launcher, source, libraries, weights, labels, and inference configuration. |
 | Initial archive | Omit the contents of `data/`, `results/`, `logs/`, and `cache/` from the release copy. The app creates its own fresh local state. |
 | Personal cover photos and paths | Exclude photos under `assets/user_heroes/`, reset `config/hero_gallery.json`, and point `config/settings.json` to the bundled `NVIDIA` directory by relative path. |
-| Media and licenses | Retain media whose terms permit distribution. Verify the reference leaflet separately. Include credits and license notices for photographs, recordings, fonts, models, and libraries. [Data and media sources](docs/sources/data-sources.md) |
+| Media and licenses | Keep the identification leaflet plates and their source notes. Preserve credits and license notices for photographs, recordings, fonts, models, and libraries. [Data and media sources](docs/sources/data-sources.md) |
 | Version and retest | Match `config/release.json` to the release tag. Extract under a different path, verify the archive starts empty, launch the app, and process a known-source photograph. [Project release instructions](docs/GitHub发布与版本检查.md) |
 
 The app's **Version and updates** dialog queries the latest stable GitHub Release. The release page contains the download and integrity check.

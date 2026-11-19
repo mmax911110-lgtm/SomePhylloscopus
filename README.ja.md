@@ -65,7 +65,7 @@
 | Windows で使用する | [GitHub Releases](https://github.com/mmax911110-lgtm/SomePhylloscopus/releases) の **Windows NVIDIA ポータブル版** | `柳莺识别.exe`、図鑑素材、モデルの重み、ランタイムを含む一式です。 |
 | コードを読む・改変する | **Code → Download ZIP** またはリポジトリをクローン | ソース、公開設定、文書、画面画像です。識別の実行には対応するポータブル版一式が必要です。 |
 
-初回の公開ダウンロードは準備中です。公開時はリリースのタイトルでバージョンを確認してください。GitHub が自動生成する **Source code (zip)** と **Source code (tar.gz)** にはリポジトリのソースが収録されています。[GitHub Releases の説明](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)
+リリースページから `Download-Windows-NVIDIA.cmd` をダウンロードし、ダブルクリックします。四つの分割ファイルを取得・検証し、結合した ZIP 全体の SHA-256 を照合します。GitHub が自動生成する **Source code (zip)** と **Source code (tar.gz)** にはリポジトリのソースが収録されています。[GitHub Releases の説明](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)
 
 ### 動作環境
 
@@ -201,7 +201,7 @@ GitHub リポジトリはソース用です。BioCLIP 2.5 の重みだけで約 
 | 起動と識別 | 同じ版の起動ファイル、ソース、ライブラリ、重み、種ラベル、推論設定を含めます。 |
 | 初期状態 | 配布用のコピーでは `data/`、`results/`、`logs/`、`cache/` の内容を除き、起動後に新しいローカル記録を作成できることを確認します。 |
 | 個人の表紙とパス | `assets/user_heroes/` の個人写真を除き、`config/hero_gallery.json` を初期化します。`config/settings.json` には同梱の `NVIDIA` への相対パスを設定します。 |
-| 素材とライセンス | 公開できる素材だけを含め、折り込み図鑑の許可は個別に確認します。写真、録音、フォント、モデル、ライブラリのクレジットとライセンスを添付します。[データと素材の出典](docs/sources/data-sources.md) |
+| 素材とライセンス | 識別用の折り込み図と出典を同梱します。写真、録音、フォント、モデル、ライブラリのクレジットとライセンスも添付します。[データと素材の出典](docs/sources/data-sources.md) |
 | バージョンと再検証 | `config/release.json` と公開タグを合わせます。別の場所に解凍し、記録が空の状態で起動して、出典が明らかな写真を識別できることを確認します。[公開手順](docs/GitHub发布与版本检查.md) |
 
 アプリのバージョン・更新画面から GitHub の最新の正式版情報を確認できます。ダウンロードとチェックサムはリリースページに掲載します。
