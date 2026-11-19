@@ -21,7 +21,7 @@
 ## 发出正式版
 
 1. 从准备公开的代码提交创建版本标签，并在 GitHub Releases 发布相同标签的正式版。将它标记为该仓库的最新版本。草稿、预发行版或单独推送的 Git 标签不会出现在正式版查询中。[GitHub 发布说明](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)
-2. 在 Release 说明里给出更新内容及 Windows 便携包的下载入口。v0.1.0 使用四个分件和一个 Windows 下载器。下载器校验每个分件、合并 ZIP，再校验整包。GitHub Releases 要求每个上传文件小于 2 GiB。[GitHub Release 文件限制](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases#storage-and-bandwidth-quotas)
+2. 在 Release 说明里给出更新内容及 Windows 便携包的下载入口。v0.1.0 使用分件和一个 Windows 下载器。下载器校验每个分件、合并 ZIP，再校验整包。GitHub Releases 要求每个上传文件小于 2 GiB。[GitHub Release 文件限制](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases#storage-and-bandwidth-quotas)
 3. 用旧版点击「立即检查」，确认界面显示新标签、链接指向对应 Release。再用新版查一次，确认显示当前已是最新。
 
 此版本的检查器使用 Python 标准库读取公开发布信息，按数字比较版本，例如 `0.10.0` 高于 `0.9.9`。发布入口的安排参考了 KeePassXC 的界面实现。[KeePassXC 主窗口源码](https://github.com/keepassxreboot/keepassxc/blob/develop/src/gui/MainWindow.cpp)

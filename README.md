@@ -65,7 +65,7 @@
 | 直接在 Windows 上用 | [GitHub Releases](https://github.com/mmax911110-lgtm/SomePhylloscopus/releases) 里的「Windows NVIDIA 便携版」链接 | 完整运行包，含 `柳莺识别.exe`、图鉴素材、识别权重和配套运行库。 |
 | 看代码或自己改 | GitHub **Code → Download ZIP** 或克隆仓库 | 源码、发布配置、文档和截图。想跑完整推理还得配对应版本的便携包。 |
 
-在 Release 页面下载 `Download-Windows-NVIDIA.cmd`，双击运行。它会下载四个分件、逐件校验，再生成一个完整 ZIP 并核对整包 SHA-256。GitHub 自动生成的 `Source code (zip)` 和 `Source code (tar.gz)` 包含仓库源码。[GitHub Releases 说明](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)
+在 Release 页面下载 `Download-Windows-NVIDIA.cmd`，双击运行。它会下载全部分件、逐件校验，再生成一个完整 ZIP 并核对整包 SHA-256。GitHub 自动生成的 `Source code (zip)` 和 `Source code (tar.gz)` 包含仓库源码。[GitHub Releases 说明](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)
 
 ### 电脑要求
 
@@ -196,7 +196,7 @@ SomePhylloscopus/
 
 ## 发布便携版
 
-GitHub 仓库只放源码。光 BioCLIP 2.5 单个权重就有约 **3.67 GiB**，早就超了普通 Git 的 **100 MiB** 上限，也超了 Releases 单附件 **2 GiB** 的限制，所以在 Release 说明里挂独立整包下载地址、包大小和 SHA-256。[GitHub 普通文件限制](https://docs.github.com/en/repositories/working-with-files/managing-large-files/about-large-files-on-github#file-size-limits) · [GitHub Release 文件限制](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases#storage-and-bandwidth-quotas)
+GitHub 仓库只放源码。光 BioCLIP 2.5 单个权重就有约 **3.67 GiB**，早就超了普通 Git 的 **100 MiB** 上限，也超了 Releases 单附件 **2 GiB** 的限制，所以 Release 页面通过下载器提供完整包，并列出包大小和 SHA-256。[GitHub 普通文件限制](https://docs.github.com/en/repositories/working-with-files/managing-large-files/about-large-files-on-github#file-size-limits) · [GitHub Release 文件限制](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases#storage-and-bandwidth-quotas)
 
 发版前从正式版另拷一份干净副本按下面核对，自己日常用的工作目录照常留着个人观鸟记录：
 

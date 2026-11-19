@@ -65,7 +65,7 @@
 | Windows で使用する | [GitHub Releases](https://github.com/mmax911110-lgtm/SomePhylloscopus/releases) の **Windows NVIDIA ポータブル版** | `柳莺识别.exe`、図鑑素材、モデルの重み、ランタイムを含む一式です。 |
 | コードを読む・改変する | **Code → Download ZIP** またはリポジトリをクローン | ソース、公開設定、文書、画面画像です。識別の実行には対応するポータブル版一式が必要です。 |
 
-リリースページから `Download-Windows-NVIDIA.cmd` をダウンロードし、ダブルクリックします。四つの分割ファイルを取得・検証し、結合した ZIP 全体の SHA-256 を照合します。GitHub が自動生成する **Source code (zip)** と **Source code (tar.gz)** にはリポジトリのソースが収録されています。[GitHub Releases の説明](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)
+リリースページから `Download-Windows-NVIDIA.cmd` をダウンロードし、ダブルクリックします。分割ファイルをすべて取得・検証し、結合した ZIP 全体の SHA-256 を照合します。GitHub が自動生成する **Source code (zip)** と **Source code (tar.gz)** にはリポジトリのソースが収録されています。[GitHub Releases の説明](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)
 
 ### 動作環境
 
@@ -192,7 +192,7 @@ SomePhylloscopus-v0.1.0-Windows-NVIDIA/
 
 ## ポータブル版の公開
 
-GitHub リポジトリはソース用です。BioCLIP 2.5 の重みだけで約 **3.67 GiB** あり、通常の Git の1ファイル **100 MiB** と Releases の1添付 **2 GiB** の制限を超えます。リリースページにはポータブル版一式のダウンロード先、サイズ、SHA-256 を記載します。[GitHub のファイル制限](https://docs.github.com/en/repositories/working-with-files/managing-large-files/about-large-files-on-github#file-size-limits) · [Releases の添付ファイル制限](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases#storage-and-bandwidth-quotas)
+GitHub リポジトリはソース用です。BioCLIP 2.5 の重みだけで約 **3.67 GiB** あり、通常の Git の1ファイル **100 MiB** と Releases の1添付 **2 GiB** の制限を超えます。リリースページにはポータブル版のダウンローダー、全体のサイズ、SHA-256 を記載します。[GitHub のファイル制限](https://docs.github.com/en/repositories/working-with-files/managing-large-files/about-large-files-on-github#file-size-limits) · [Releases の添付ファイル制限](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases#storage-and-bandwidth-quotas)
 
 公開前に配布専用のコピーを用意し、普段使っているディレクトリの観察記録は手元に残します。
 

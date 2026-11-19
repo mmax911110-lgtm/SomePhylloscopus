@@ -65,7 +65,7 @@ To give the home screen some life, we let the little leaf warbler out from besid
 | Run the app on Windows | **Windows NVIDIA portable edition** on [GitHub Releases](https://github.com/mmax911110-lgtm/SomePhylloscopus/releases) | The complete app, including `柳莺识别.exe`, field-guide media, model weights, and runtime libraries. |
 | Read or modify the code | **Code → Download ZIP**, or clone the repository | Source code, release configuration, documentation, and screenshots. Full inference requires the corresponding portable edition. |
 
-Download `Download-Windows-NVIDIA.cmd` from the release page and double-click it. It downloads and verifies four parts, assembles the complete ZIP, and checks its SHA-256. The automatically generated **Source code (zip)** and **Source code (tar.gz)** archives contain the repository source. [GitHub Releases documentation](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)
+Download `Download-Windows-NVIDIA.cmd` from the release page and double-click it. It downloads and verifies the parts, assembles the complete ZIP, and checks its SHA-256. The automatically generated **Source code (zip)** and **Source code (tar.gz)** archives contain the repository source. [GitHub Releases documentation](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)
 
 ### System requirements
 
@@ -192,7 +192,7 @@ SomePhylloscopus-v0.1.0-Windows-NVIDIA/
 
 ## Publishing the portable edition
 
-The GitHub repository contains the source. The BioCLIP 2.5 weight file alone is approximately **3.67 GiB**, exceeding GitHub's **100 MiB** normal Git file limit and **2 GiB** per-release-asset limit. The release page carries the complete archive link, size, and SHA-256. [GitHub file limits](https://docs.github.com/en/repositories/working-with-files/managing-large-files/about-large-files-on-github#file-size-limits) · [Release asset limits](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases#storage-and-bandwidth-quotas)
+The GitHub repository contains the source. The BioCLIP 2.5 weight file alone is approximately **3.67 GiB**, exceeding GitHub's **100 MiB** normal Git file limit and **2 GiB** per-release-asset limit. The release page lists the downloader, the full archive size, and the SHA-256. [GitHub file limits](https://docs.github.com/en/repositories/working-with-files/managing-large-files/about-large-files-on-github#file-size-limits) · [Release asset limits](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases#storage-and-bandwidth-quotas)
 
 Make a clean distribution copy of the app to keep your personal records in your working directory.
 
