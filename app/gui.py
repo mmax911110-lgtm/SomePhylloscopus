@@ -5,6 +5,7 @@ All recognition logic, routing and wording that carries scientific meaning
 packaging around it got silly.
 """
 from .i18n import progress_message, result_message, set_language, species_name, tr
+from collections import Counter
 from copy import deepcopy
 import json
 import logging
@@ -18,6 +19,7 @@ import time
 
 from . import art
 from . import release
+from .audio_recognition import AUDIO_SUFFIXES
 from .scene import BirdScene, paint_branches
 
 DETECTION_MODES = {"普通整图": "normal", "分块补检": "tiled"}
@@ -28,6 +30,9 @@ GATE_LABELS = {"willow": "柳莺", "confirmed_willow": "柳莺", "not_willow": "
                "no_bird": "未发现鸟", "error": "识别失败",
                "willow_outside_coverage": "柳莺（覆盖外）"}
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}
+MEDIA_SUFFIXES = IMAGE_SUFFIXES | AUDIO_SUFFIXES
+IMAGE_PATTERNS = " ".join("*" + suffix for suffix in sorted(IMAGE_SUFFIXES))
+AUDIO_PATTERNS = " ".join("*" + suffix for suffix in sorted(AUDIO_SUFFIXES))
 
 # ------------------------------------------------------------------ meme copy
 # Call / song transcriptions, from 《中国鸟类野外手册》 (MacKinnon & Phillipps) species accounts;
@@ -95,11 +100,13 @@ def _pick_family(root):
 
 
 def result_kind(result):
-    """Classify a photo result for the fun layer only (does not change any data)."""
+    """Map recognition results to display states."""
     if result is None:
         return "pending"
     if result.get("status") == "error":
         return "error"
+    if result.get("media_type") == "audio":
+        return {"identified": "willow", "no_match": "audio_no_match"}.get(result.get("status"), "uncertain")
     boxes = result.get("boxes") or []
     if not boxes:
         return "no_bird"
@@ -145,9 +152,12 @@ def bird_label(box):
 
 
 class RecognitionWorker(threading.Thread):
-    def __init__(self, events, factory=None):
+    def __init__(self, events, app_root, factory=None, audio_factory=None):
         super().__init__(name="willow-recognition", daemon=False)
         self.events, self.factory, self.commands = events, factory, queue.Queue()
+        self.app_root, self.audio_factory = app_root, audio_factory
+        self.audio_engine = None
+        self.audio_cancel = threading.Event()
         self.engine, self.engine_key = None, None
 
     def _close_engine(self):
@@ -164,32 +174,60 @@ class RecognitionWorker(threading.Thread):
                 job = self.commands.get()
                 if job is None:
                     return
-                key, source, package, device, mode, output, config = job
+                key, source = job[:2]
                 self.events.put(("started", key))
                 try:
-                    engine_key = (str(Path(package).resolve()), device)
-                    if self.engine_key != engine_key:
-                        self._close_engine()
-                        factory = self.factory
-                        if factory is None:
-                            from .backend import WillowOnlyEngine
-                            factory = WillowOnlyEngine
-                        self.engine = factory(package, device=device,
-                            progress=lambda message: self.events.put(("progress", key, str(message))),
-                            config=deepcopy(config))
-                        self.engine_key = engine_key
-                    result = self.engine.recognize(source, output, detection_mode=mode)
+                    if Path(source).suffix.lower() in AUDIO_SUFFIXES:
+                        try:
+                            result = self._recognize_audio(Path(source))
+                        except InterruptedError:
+                            self.events.put(("cancelled", key))
+                            continue
+                    else:
+                        result = self._recognize_photo(job)
                     self.events.put(("done", key, result))
                 except Exception as exc:
                     self.events.put(("failed", key, f"{type(exc).__name__}: {exc}"))
         finally:
             self._close_engine()
+            self.audio_engine = None
             self.events.put(("stopped",))
+
+    def _recognize_audio(self, source):
+        if self.audio_cancel.is_set():
+            raise InterruptedError
+        if self.audio_engine is None:
+            factory = self.audio_factory
+            if factory is None:
+                from .audio_recognition import AudioRecognizer
+                factory = AudioRecognizer
+            self.audio_engine = factory(self.app_root)
+        result = self.audio_engine.recognize(source, cancel=self.audio_cancel)
+        if self.audio_cancel.is_set():
+            raise InterruptedError
+        return {**result, "media_type": "audio", "source": str(source)}
+
+    def _recognize_photo(self, job):
+        key, source, package, device, mode, output, config = job
+        if not package.strip() or not Path(package).is_dir():
+            raise FileNotFoundError(tr("找不到照片识别模型包。"))
+        engine_key = (str(Path(package).resolve()), device)
+        if self.engine_key != engine_key:
+            self._close_engine()
+            factory = self.factory
+            if factory is None:
+                from .backend import WillowOnlyEngine
+                factory = WillowOnlyEngine
+            self.engine = factory(package, device=device,
+                progress=lambda message: self.events.put(("progress", key, str(message))),
+                config=deepcopy(config))
+            self.engine_key = engine_key
+        return self.engine.recognize(source, output, detection_mode=mode)
 
 
 class WillowApplication:
     def __init__(self, window, app_root, package_root, *, engine_factory=None,
-                 initial_images=(), config=None, instance=None):
+                 audio_engine_factory=None, initial_images=(), config=None, instance=None):
         self.window, self.app_root = window, Path(app_root).resolve()
         self.instance = instance
         self.exit_dialog = self.tray = None
@@ -235,14 +273,17 @@ class WillowApplication:
         self.device = tk.StringVar(window, device_label)
         mode_label = settings.get("detection_mode", "普通整图")
         self.detection_mode = tk.StringVar(window, tr(mode_label if mode_label in DETECTION_MODES else "普通整图"))
-        self.status = tk.StringVar(window, tr("投喂几张疑似柳莺的照片，再点「开始鉴定！」—— 每只鸟都会单独审问。"))
+        self.status = tk.StringVar(window, tr("导入照片或叫声，再点「开始鉴定！」。"))
         self.audio_source = tk.StringVar(window, "")
         self.photo_message = tk.StringVar(window, "")
         self.verdict = tk.StringVar(window, "")
         self.details = tk.StringVar(window, tr("先在左边点一张照片，再在「逐只审问」里点一只鸟。"))
         self._detail_lines = None
         self.jobs, self.results, self.active = {}, {}, set()
+        self.audio_keys = set()
+        self._audio_view = False
         self.batch_keys = []
+        self._photo_archived_in_batch = False
         self.current_result, self.current_bird = None, None
         self.preview_photo = self.crop_photo = None
         self.stamp_photo = self.placeholder_photo = None
@@ -271,7 +312,7 @@ class WillowApplication:
         self.audio = BirdAudioPlayer(self.app_root)
         self.scene = None
         self.events = queue.Queue()
-        self.worker = RecognitionWorker(self.events, engine_factory)
+        self.worker = RecognitionWorker(self.events, self.app_root, engine_factory, audio_engine_factory)
         if (self.app_root / "config/hero_gallery.json").is_file():
             # A saved gallery needs the archive. Overlap its import with Tk setup.
             from concurrent.futures import ThreadPoolExecutor
@@ -475,7 +516,7 @@ class WillowApplication:
         self.tip_label = ttk.Label(self.toolbar, text="", style="Soft.TLabel", anchor="e", justify="right")
         self.tip_label.grid(row=0, column=6, sticky="e", padx=(P(16), P(2)))
 
-        # ------------- left card: photo list
+        # ------------- left card: photo and audio list
         self.left = self._card()
         self.left.columnconfigure(0, weight=1)
         self.left.rowconfigure(1, weight=1)
@@ -484,7 +525,7 @@ class WillowApplication:
         self.count_label.grid(row=0, column=0, columnspan=2, sticky="e", pady=(0, P(6)))
         self.photo_tree = ttk.Treeview(self.left, columns=("photo", "state"), show="headings", selectmode="browse",
                                        height=4, style=self.tree_style)
-        self.photo_tree.heading("photo", text=tr("照片"))
+        self.photo_tree.heading("photo", text=tr("照片/声音"))
         self.photo_tree.heading("state", text=tr("状态"))
         self.photo_tree.column("photo", width=P(130), minwidth=P(80))
         self.photo_tree.column("state", width=P(70), minwidth=P(55), stretch=False, anchor="center")
@@ -531,12 +572,15 @@ class WillowApplication:
         self.preview = tk.Canvas(self.preview_card, background=CARD, highlightthickness=0, height=P(160), width=P(500))
         self.preview.grid(row=2, column=0, sticky="nsew")
         self.preview.bind("<Configure>", self._schedule_preview)
+        self.listen_button = ttk.Button(self.preview, text=tr("播放录音"), style=meme,
+                                        command=self._play_selected_recording)
 
         # ------------- birds card
         self.birds_card = self._card()
         self.birds_card.columnconfigure(0, weight=1)
         self.birds_card.rowconfigure(1, weight=1)
-        ttk.Label(self.birds_card, text=tr("逐只审问"), style="Head.TLabel").grid(row=0, column=0, sticky="w", pady=(0, P(6)))
+        self.birds_heading = ttk.Label(self.birds_card, text=tr("逐只审问"), style="Head.TLabel")
+        self.birds_heading.grid(row=0, column=0, sticky="w", pady=(0, P(6)))
         self.bird_tree = ttk.Treeview(self.birds_card, columns=("bird", "state"), show="headings",
                                       selectmode="browse", height=3, style=self.tree_style)
         self.bird_tree.heading("bird", text=tr("编号"))
@@ -947,6 +991,9 @@ class WillowApplication:
             subprocess.Popen(["xdg-open", str(path)])
 
     def open_report(self):
+        if self._selected_audio():
+            self.status.set(tr("录音结果见「鸟声候选」。查看照片鉴定证书时，请先选择照片。"))
+            return
         self._open_library("certificate", self.current_result)
 
     def open_results(self):
@@ -1171,9 +1218,24 @@ class WillowApplication:
         self._audio_id = self.window.after(200, self._poll_audio)
 
     def choose_images(self):
-        paths = filedialog.askopenfilenames(parent=self.window, title=tr("投喂疑似柳莺的照片"),
-            filetypes=[(tr("照片"), "*.jpg *.jpeg *.png *.webp *.bmp *.tif *.tiff"), (tr("所有文件"), "*.*")])
+        paths = filedialog.askopenfilenames(parent=self.window, title=tr("选择鸟类照片或录音"),
+            filetypes=[(tr("照片/声音"), f"{IMAGE_PATTERNS} {AUDIO_PATTERNS}"),
+                       (tr("照片"), IMAGE_PATTERNS), (tr("声音"), AUDIO_PATTERNS)])
         self.add_paths(paths)
+
+    def _selected_audio(self):
+        selected = self.photo_tree.selection()
+        if selected and selected[0] in self.audio_keys:
+            return self.jobs[selected[0]]
+        return None
+
+    def _play_selected_recording(self):
+        path = self._selected_audio()
+        if path is not None:
+            try:
+                self.open_path(path)
+            except OSError as exc:
+                self.status.set(tr("录音暂时无法播放：{0}").format(exc))
 
     def choose_package(self):
         folder = filedialog.askdirectory(parent=self.window, title=tr("选择完整NVIDIA模型包"),
@@ -1184,23 +1246,35 @@ class WillowApplication:
             self.status.set(tr("模型包位置记住了，下次鉴定就用它。"))
 
     def _set_photo_state(self, key, state):
-        self.photo_tree.set(key, "state", tr(PHOTO_STATES[state]))
+        self.photo_tree.set(key, "state", self._state_label(key, state))
         self.photo_tree.item(key, tags=(state,))
+
+    def _state_label(self, key, state):
+        label = "正在听" if state == "running" and key in self.audio_keys else PHOTO_STATES[state]
+        return tr(label)
 
     def _update_count(self):
         if not self.jobs:
             self.count_label.configure(text=tr("空空如也"))
             return
-        done = sum(1 for k in self.jobs if k in self.results)
-        self.count_label.configure(text=tr("{0}/{1} 只已审").format(done, len(self.jobs)))
+        self.count_label.configure(text=tr("{0}/{1} 已鉴定").format(len(self.results), len(self.jobs)))
 
     def add_paths(self, paths):
+        known = set(self.jobs.values())
         for source in paths:
-            path = Path(source).resolve()
-            if not path.is_file() or path.suffix.lower() not in IMAGE_SUFFIXES or str(path) in self.jobs.values():
+            path = Path(source)
+            suffix = path.suffix.lower()
+            if suffix not in MEDIA_SUFFIXES or str(path) in known:
+                continue
+            path = path.resolve()
+            source = str(path)
+            if source in known or not path.is_file():
                 continue
             key = f"photo_{len(self.jobs)+1}"
-            self.jobs[key] = str(path)
+            self.jobs[key] = source
+            known.add(source)
+            if suffix in AUDIO_SUFFIXES:
+                self.audio_keys.add(key)
             self.photo_tree.insert("", "end", iid=key, values=(path.name, tr(PHOTO_STATES["pending"])), tags=("pending",))
         if self.jobs and not self.photo_tree.selection():
             self.photo_tree.selection_set(next(iter(self.jobs)))
@@ -1217,7 +1291,9 @@ class WillowApplication:
         self.jobs.clear()
         self.results.clear()
         self.active.clear()
+        self.audio_keys.clear()
         self.current_result = self.current_bird = None
+        self._set_audio_view(False)
         for tree in (self.photo_tree, self.bird_tree):
             for iid in tree.get_children():
                 tree.delete(iid)
@@ -1228,7 +1304,7 @@ class WillowApplication:
         self._show_verdict(None)
         self._detail_lines = None
         self.details.set(tr("先在左边点一张照片，再在「逐只审问」里点一只鸟。"))
-        self.status.set(tr("全部放生了 (・ω・)ノ 可以投喂新照片继续。"))
+        self.status.set(tr("全部放生了 (・ω・)ノ 可以重新导入照片或叫声。"))
         self._update_count()
         self._refresh_preview()
 
@@ -1268,29 +1344,33 @@ class WillowApplication:
         if self.busy or self.closing:
             return
         if not self.jobs:
-            self.status.set(tr("还没投喂照片呢 —— 先点「找到鸟了！」。"))
+            self.status.set(tr("还没有文件，先点「找到鸟了！」导入照片或叫声。"))
             return
-        if not self.package.get().strip() or not Path(self.package.get()).is_dir():
+        package = self.package.get()
+        if not self.audio_keys and (not package.strip() or not Path(package).is_dir()):
             self.status.set(tr("找不到模型包 (°ー°〃) 先点「模型包在哪…」选一下完整的模型包位置。"))
             return
         self.save_settings()
         self._set_busy(True)
         mode = DETECTION_MODES[self.detection_choices[self.detection_mode.get()]]
         device = self.device_choices[self.device.get()]
-        package = self.package.get()
         self.active = set(self.jobs)
         self.batch_keys = list(self.jobs)
+        self._photo_archived_in_batch = False
         self.last_progress = ""
+        self.worker.audio_cancel.clear()
         for key in self.jobs:
             self._set_photo_state(key, "queued")
-        self.status.set(tr("{0} 张照片排好队了，开始鉴定……").format(len(self.active)))
+        self.status.set(tr("{0} 个文件排好队了，开始鉴定……").format(len(self.active)))
         self._refresh_selected_headline()
         # paint the queued state now, before the worker starts competing for the CPU
         self.window.update_idletasks()
+        config = deepcopy(self.config)
         for key, source in self.jobs.items():
-            self.worker.commands.put((key, source, package, device, mode, self.output_root, deepcopy(self.config)))
+            self.worker.commands.put((key, source, package, device, mode, self.output_root, config))
 
     def cancel_pending(self):
+        self.worker.audio_cancel.set()
         count = 0
         while True:
             try:
@@ -1304,17 +1384,17 @@ class WillowApplication:
             self.active.discard(key)
             self._set_photo_state(key, "cancelled")
             count += 1
-        self.status.set(tr("行，{0} 张排队的照片不认了；正在认的那张会认完。").format(count))
+        self.status.set(tr("已取消 {0} 个排队文件。正在识别的录音会停止，照片会处理完。").format(count))
         if not self.active:
             self._set_busy(False)
         self._refresh_selected_headline()
 
     def _batch_summary(self):
-        kinds = [result_kind(self.results.get(k)) for k in self.batch_keys if k in self.results]
+        kinds = Counter(result_kind(self.results.get(key)) for key in self.batch_keys if key in self.results)
         parts = []
         for kind, label in (("willow", tr("柳莺")), ("not_willow", tr("非柳莺")), ("uncertain", tr("薛定谔")),
-                            ("no_bird", tr("没找到鸟")), ("error", tr("翻车"))):
-            n = kinds.count(kind)
+                            ("no_bird", tr("没找到鸟")), ("audio_no_match", tr("录音无可靠匹配")), ("error", tr("翻车"))):
+            n = kinds[kind]
             if n:
                 parts.append(f"{label} ×{n}")
         return "，".join(parts)
@@ -1342,33 +1422,39 @@ class WillowApplication:
                             text=tr("设置 · 有更新") if self._release_result.update_available else tr("设置"))
                         self._layout(self.window.winfo_width(), self.window.winfo_height())
                         self._refresh_release_dialog()
-                elif kind in ("done", "failed"):
+                elif kind in ("done", "failed", "cancelled"):
                     key = event[1]
                     self.active.discard(key)
                     if self.running_key == key:
                         self.running_key = None
                     if kind == "done":
                         self.results[key] = event[2]
-                        try:
-                            self._get_library().ingest_result(event[2])
-                            if self.library_window is not None and self.library_window.window.winfo_exists():
-                                self.library_window.refresh()
-                        except Exception:
-                            self.logger.exception("本次识别保存到档案库失败；原结果仍保存在 results")
+                        if key not in self.audio_keys:
+                            try:
+                                self._get_library().ingest_result(event[2])
+                                self._photo_archived_in_batch = True
+                                if self.library_window is not None and self.library_window.window.winfo_exists():
+                                    self.library_window.refresh()
+                            except Exception:
+                                self.logger.exception("本次识别保存到档案库失败；原结果仍保存在 results")
                         self._set_photo_state(key, "done")
                         self.logger.info("完成 %s：%s", self.jobs[key], event[2].get("message", ""))
-                    else:
-                        self.results[key] = {"status": "error", "message": event[2], "source": self.jobs[key], "boxes": []}
+                    elif kind == "failed":
+                        self.results[key] = {"status": "error", "message": event[2], "source": self.jobs[key], "boxes": [],
+                                             "media_type": "audio" if key in self.audio_keys else "photo"}
                         self._set_photo_state(key, "failed")
                         self.logger.error("失败 %s：%s", self.jobs[key], event[2])
+                    else:
+                        self.results.pop(key, None)
+                        self._set_photo_state(key, "cancelled")
                     self._update_count()
                     if self.photo_tree.selection() == (key,):
                         self.select_photo()
                     if not self.active:
                         self._set_busy(False)
                         summary = self._batch_summary()
-                        self.status.set(tr("本批鉴定完毕！") + (f"（{summary}）" if summary else "") +
-                                        tr(" 点击「翻翻档案」查看本地记录。"))
+                        archive_hint = tr(" 点击「翻翻档案」查看本地记录。") if self._photo_archived_in_batch else ""
+                        self.status.set(tr("本批鉴定完毕！") + (f"（{summary}）" if summary else "") + archive_hint)
         except queue.Empty:
             pass
         if self.closing and not self.worker.is_alive():
@@ -1399,12 +1485,13 @@ class WillowApplication:
         if not self.busy or self.closing:
             return
         face = SPINNER[self._tick % len(SPINNER)]
-        text = f"{face}  {tr(self._loading_line)}"
+        label = "正在听录音，寻找柳莺的叫声……" if self.running_key in self.audio_keys else self._loading_line
+        text = f"{face}  {tr(label)}"
         if self.last_progress:
             text += f"   ｜ {self.last_progress}"
         left = len(self.active)
         if left:
-            text += tr("   ｜ 还剩 {0} 张").format(left)
+            text += tr("   ｜ 还剩 {0} 个").format(left)
         self.status.set(text)
 
     def _animate(self):
@@ -1422,7 +1509,7 @@ class WillowApplication:
             key = self.running_key
             if key and key in self.jobs and key in self.active:
                 try:
-                    self.photo_tree.set(key, "state", tr(PHOTO_STATES["running"]) + "." * (1 + self._tick % 3))
+                    self.photo_tree.set(key, "state", self._state_label(key, "running") + "." * (1 + self._tick % 3))
                 except tk.TclError:
                     pass
         self._anim_id = self.window.after(450, self._animate)
@@ -1430,10 +1517,13 @@ class WillowApplication:
     # ============================================================ selection
     def _show_verdict(self, key):
         result = self.results.get(key) if key else None
+        if key in self.audio_keys:
+            self._show_audio_verdict(key, result)
+            return
         kind = result_kind(result)
         color = KIND_COLORS.get(kind, KIND_COLORS["pending"])[0]
         if key is None:
-            text, prefix = tr("还没有嫌疑鸟 —— 先投喂几张照片吧"), ""
+            text, prefix = tr("还没有嫌疑鸟，先导入照片或叫声吧"), ""
         elif result is None:
             name = Path(self.jobs[key]).name
             if key == self.running_key:
@@ -1464,6 +1554,40 @@ class WillowApplication:
         self.verdict_label.configure(foreground=color)
         self.message_prefix.configure(text=prefix)
 
+    def _show_audio_verdict(self, key, result):
+        kind = result_kind(result)
+        if key in self.active:
+            label = "正在听录音……" if key == self.running_key else "录音排队中"
+            color = INK
+        elif kind == "pending":
+            label, color = "待鉴定：点「开始鉴定！」识别叫声", INK
+        elif kind == "error":
+            label, color = "录音识别失败", RED
+        else:
+            candidates = result.get("candidates") or ()
+            if kind == "willow" and candidates:
+                name = self._audio_candidate_name(candidates[0])
+                self.verdict.set(tr("声音候选：{0}").format(name))
+                self.verdict_label.configure(foreground=KIND_COLORS["willow"][0])
+                self.message_prefix.configure(text=tr("录音："))
+                return
+            label = "录音无可靠匹配" if kind == "audio_no_match" else "叫声证据不足，无法确认鸟种"
+            color = KIND_COLORS["uncertain"][0]
+        self.verdict.set(tr(label))
+        self.verdict_label.configure(foreground=color)
+        self.message_prefix.configure(text=tr("录音："))
+
+    def _set_audio_view(self, audio):
+        if audio == self._audio_view:
+            return
+        self._audio_view = audio
+        self.birds_heading.configure(text=tr("鸟声候选" if audio else "逐只审问"))
+        self.bird_tree.heading("state", text=tr("候选鸟种" if audio else "审问结果"))
+        if audio:
+            self.crop.grid_remove()
+        else:
+            self.crop.grid()
+
     def _refresh_selected_headline(self):
         selected = self.photo_tree.selection()
         if selected and selected[0] in self.jobs:
@@ -1478,6 +1602,11 @@ class WillowApplication:
         self.current_bird = None
         for iid in self.bird_tree.get_children():
             self.bird_tree.delete(iid)
+        self._set_audio_view(key in self.audio_keys)
+        if self._audio_view:
+            self._show_verdict(key)
+            self._select_recording(key)
+            return
         self._detail_lines = None
         self.details.set(tr("点「逐只审问」里的一只鸟，看看它的鉴定卡。"))
         self.crop.delete("all")
@@ -1501,6 +1630,39 @@ class WillowApplication:
             self.photo_message.set(Path(self.jobs[key]).name)
             self._draw_crop_placeholder(tr("还没鉴定"))
         self._refresh_preview()
+
+    def _select_recording(self, key):
+        result = self.current_result or {}
+        self.photo_message.set(Path(self.jobs[key]).name)
+        candidates = (result.get("candidates") or [])[:3]
+        self._flow_photos.clear()
+        self.crop_photo = self.preview_photo = None
+        for rank, candidate in enumerate(candidates):
+            self.bird_tree.insert("", "end", iid=str(rank), values=(rank + 1, self._audio_candidate_name(candidate)))
+        if candidates:
+            self.bird_tree.selection_set("0")
+            self._show_audio_candidate(candidates[0])
+        else:
+            error = result.get("message") if result.get("status") == "error" else None
+            label = "没有可显示的柳莺候选。" if result else "识别完成后可在此查看鸟声候选。"
+            self._set_detail_lines([(error or tr(label), "note")])
+        self._refresh_preview()
+
+    def _audio_candidate_name(self, candidate):
+        if self.language == "en" and candidate.get("english_name"):
+            return candidate["english_name"]
+        return species_name(candidate.get("common_name"), candidate.get("scientific_name")) or ""
+
+    def _show_audio_candidate(self, candidate):
+        lines = [
+            (self._audio_candidate_name(candidate), "h"),
+            (candidate.get("scientific_name") or "", "key"),
+            (tr("鸟声模型分数：{0}").format(self._pct(candidate.get("confidence"))), "key"),
+        ]
+        if candidate.get("evidence_seconds") is not None:
+            lines.append((tr("证据片段从 {0:.1f} 秒开始").format(candidate["evidence_seconds"]), "key"))
+        lines.append((tr("候选分数需结合录音质量和其他证据判断。"), "note"))
+        self._set_detail_lines(lines)
 
     def _draw_crop_placeholder(self, text):
         canvas = self.crop
@@ -1565,7 +1727,22 @@ class WillowApplication:
             except Exception as exc:
                 self.logger.warning("占位图失败：%s", exc)
         canvas.create_text(w / 2, text_y, fill=INK_SOFT, font=(self.family, 11), justify="center",
-                           text=tr("这只冕柳莺等你投喂等得都坐地上了 —— 点「找到鸟了！」丢几只疑似柳莺进来"))
+                           text=tr("点「找到鸟了！」导入疑似柳莺的照片或叫声。"))
+
+    def _draw_recording_preview(self, result):
+        canvas = self.preview
+        canvas.delete("all")
+        w, h = canvas.winfo_width(), canvas.winfo_height()
+        if w < self._px(80) or h < self._px(55):
+            return
+        duration = (result or {}).get("duration_seconds")
+        model = (result or {}).get("model")
+        summary = " · ".join(part for part in (tr("录音时长：{0:.1f} 秒").format(duration)
+                                              if isinstance(duration, (int, float)) else None, model) if part)
+        if summary:
+            canvas.create_text(w / 2, h * .35, text=summary, fill=INK_SOFT,
+                               font=self.f_body, width=max(1, w - self._px(24)))
+        canvas.create_window(w / 2, h * (.62 if summary else .5), window=self.listen_button)
 
     def _stamp_image(self, result):
         kind = result_kind(result)
@@ -1601,6 +1778,9 @@ class WillowApplication:
             self._draw_preview_placeholder()
             return
         result = self.results.get(selected[0])
+        if selected[0] in self.audio_keys:
+            self._draw_recording_preview(result)
+            return
         if result is not None and self.current_bird is not None and self._draw_flow(result, self.current_bird):
             return
         overlay = self._stamp_image(result) if result is not None else None
@@ -1818,6 +1998,12 @@ class WillowApplication:
     def select_bird(self, event=None):
         selected = self.bird_tree.selection()
         if not selected or self.current_result is None:
+            return
+        if self._audio_view:
+            candidates = self.current_result.get("candidates") or ()
+            rank = int(selected[0])
+            if rank < len(candidates):
+                self._show_audio_candidate(candidates[rank])
             return
         box = self.current_result["boxes"][int(selected[0])]
         self.current_bird = box

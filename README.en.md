@@ -90,6 +90,10 @@ Use 64-bit Windows 10 or 11 with a CUDA- and BF16-capable NVIDIA GPU and a compa
 4. Open **Browse records** (「翻翻档案」) to add the capture date, location, and notes. Birds from the same original photo share its capture information. You can change the display name, select multiple records with Ctrl or Shift, and undo a deletion with Ctrl+Z.
 5. In **Species cards** (「鸟种卡」), search by Chinese or scientific name. The field guide has 58 cards, 37 with offline recordings. Use **Compare IDs** (「识别对比」) to view another species alongside the current one when reference images are available.
 
+### Identify from a recording
+
+With the audio component installed, **Add files** accepts photos and MP3, WAV, FLAC, OGG, Opus, or AIFF recordings. Click **Identify**, then select a recording to see leaf warbler candidates, model scores, and evidence timestamps. Audio is processed offline on the local CPU. [Model, licenses, and installation layout](docs/sources/audio-recognition.md)
+
 ### Reading the results
 
 | What you see | How to read it |
