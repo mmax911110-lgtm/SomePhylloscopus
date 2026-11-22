@@ -368,9 +368,9 @@ def sticker_text(base, xy, text, size, fill=YELLOW, stroke=INK, stroke_width=Non
     return d.textbbox((x, y), text, font=f, stroke_width=stroke_width + 3)
 
 
-def green_title(text, size):
+def green_title(text, size, typeface=None):
     """Brush-lettered title with a leaf-green gradient, dark outline and soft shadow."""
-    f = title_font(size)
+    f = typeface or title_font(size)
     stroke = max(2, size // 20)
     probe = ImageDraw.Draw(Image.new("L", (1, 1)))
     bb = probe.textbbox((0, 0), text, font=f, stroke_width=stroke)

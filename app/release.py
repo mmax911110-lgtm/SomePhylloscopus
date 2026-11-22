@@ -1,4 +1,5 @@
 """Read the installed version and compare it with the latest public GitHub release."""
+from .i18n import tr
 from dataclasses import dataclass
 from http.client import HTTPException
 import json
@@ -53,7 +54,7 @@ class ReleaseResult:
 
 def check_latest(info: ReleaseInfo) -> ReleaseResult:
     if not info.repository:
-        return ReleaseResult("尚未配置 GitHub 发布仓库。")
+        return ReleaseResult(tr("尚未配置 GitHub 发布仓库。"))
     request = Request(
         f"https://github.com/{info.repository}/releases/latest",
         method="HEAD",
@@ -65,27 +66,27 @@ def check_latest(info: ReleaseInfo) -> ReleaseResult:
         path = url.path.split("/")
         if (url.scheme != "https" or url.netloc.lower() != "github.com" or len(path) != 6
                 or "/".join(path[1:3]).lower() != info.repository.lower() or path[3:5] != ["releases", "tag"]):
-            return ReleaseResult("GitHub 未返回可识别的正式版。")
+            return ReleaseResult(tr("GitHub 未返回可识别的正式版。"))
         tag = path[5]
         latest = version_tuple(tag)
     except HTTPError as error:
         if error.code == 404:
-            return ReleaseResult("未找到公开的正式版。请检查仓库地址和 Releases。")
+            return ReleaseResult(tr("未找到公开的正式版。请检查仓库地址和 Releases。"))
         if error.code in (403, 429):
-            return ReleaseResult("GitHub 暂时拒绝查询，请稍后再试。")
-        return ReleaseResult(f"GitHub 查询失败（HTTP {error.code}）。")
+            return ReleaseResult(tr("GitHub 暂时拒绝查询，请稍后再试。"))
+        return ReleaseResult(tr("GitHub 查询失败（HTTP {0}）。").format(error.code))
     except (URLError, OSError, HTTPException):
-        return ReleaseResult("暂时无法连接 GitHub。联网后可重试。")
+        return ReleaseResult(tr("暂时无法连接 GitHub。联网后可重试。"))
     except ValueError:
-        return ReleaseResult("GitHub 发布链接或版本号格式有误。")
+        return ReleaseResult(tr("GitHub 发布链接或版本号格式有误。"))
 
     current = version_tuple(info.version)
     if latest > current:
-        return ReleaseResult(f"发现正式版 {tag}。", True,
+        return ReleaseResult(tr("发现正式版 {0}。").format(tag), True,
                              f"https://github.com/{info.repository}/releases/tag/{tag}")
     if latest < current:
-        return ReleaseResult(f"GitHub 最新正式版为 {tag}，当前安装版本更新。")
-    return ReleaseResult(f"当前已是最新正式版（{tag}）。")
+        return ReleaseResult(tr("GitHub 最新正式版为 {0}，当前安装版本更新。").format(tag))
+    return ReleaseResult(tr("当前已是最新正式版（{0}）。").format(tag))
 
 
 def automatic_check_due(cache_path, info: ReleaseInfo) -> bool:

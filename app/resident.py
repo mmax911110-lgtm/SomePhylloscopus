@@ -1,4 +1,5 @@
 """pystray bridge. All Tk operations stay on the application's main thread."""
+from .i18n import tr
 from pathlib import Path
 import sys,threading,queue
 
@@ -10,9 +11,9 @@ class Tray:
         from .scene import frame
         self.actions=queue.Queue();self.ready=threading.Event();self.failed=None
         self.icon=pystray.Icon('some_leaf_warbler',frame('perch',width=128),
-            '某种柳莺 · 后台待机，模型已保留',pystray.Menu(
-                pystray.MenuItem('回来找鸟 · 打开窗口',lambda:self.actions.put('restore'),default=True),
-                pystray.MenuItem('彻底退出 · 释放缓存',lambda:self.actions.put('exit'))))
+            tr('某种柳莺 · 后台待机，模型已保留'),pystray.Menu(
+                pystray.MenuItem(tr('回来找鸟 · 打开窗口'),lambda:self.actions.put('restore'),default=True),
+                pystray.MenuItem(tr('彻底退出 · 释放缓存'),lambda:self.actions.put('exit'))))
         def run():
             try:self.icon.run(setup=lambda icon:self.ready.set())
             except Exception as exc:

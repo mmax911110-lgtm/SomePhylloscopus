@@ -3,6 +3,8 @@
 No model/database work lives here. ``owner`` supplies the existing reference
 image lookup and species-detail callback. Only pixel preparation runs outside Tk.
 """
+from .i18n import species_name, tr
+
 from collections import deque, OrderedDict
 from functools import lru_cache
 import math
@@ -76,7 +78,7 @@ class SpeciesCardList(tk.Frame):
         self._thumb_after = None
         self._pending = deque()
         self._closed = False
-        self._empty = self.canvas.create_text(20, 24, anchor="nw", text="当前分区没有匹配的鸟种卡。",
+        self._empty = self.canvas.create_text(20, 24, anchor="nw", text=tr("当前分区没有匹配的鸟种卡。"),
                                               fill=SOFT, font=self._fonts["note"], state="hidden")
         self.canvas.bind("<Configure>", self._schedule_draw, add="+")
         self.canvas.bind("<Button-1>", self._click)
@@ -237,11 +239,11 @@ class SpeciesCardList(tk.Frame):
             text_x, text_y = 133, y + 10
             text_width = max(40, width - text_x - 18)
             count = int(card.get("observation_count") or 0)
-            count_text = f"{count} 次"
+            count_text = tr("{0} 次").format(count)
             badge_w = self._measure["count"](count_text) + 12 if count else 0
             # Keep counts beside the final caption so long Chinese names retain
             # the full text column instead of being squeezed by a top badge.
-            title = self._title_lines(card.get("common_name") or sci, text_width)
+            title = self._title_lines(species_name(card.get("common_name"), sci), text_width)
             c.coords(slot["name"], text_x, text_y)
             c.itemconfigure(slot["name"], text=title)
             sci_y = text_y + self._name_height * (title.count("\n") + 1) + 3
@@ -249,9 +251,9 @@ class SpeciesCardList(tk.Frame):
             c.itemconfigure(slot["scientific"], text=self._fit(sci, self._measure["scientific"], text_width))
             note_y = bottom - self._note_height - 12
             images = int(card.get("image_count") or 0)
-            note = (f"{images} 张照片" if images else "还没有本地照片")
+            note = (tr("{0} 张照片").format(images) if images else tr("还没有本地照片"))
             if not _willow(card):
-                note += " · 非柳莺"
+                note += tr(" · 非柳莺")
             c.coords(slot["note"], text_x, note_y)
             c.itemconfigure(slot["note"], text=self._fit(note, self._measure["note"],
                                                        text_width - (badge_w + 6 if count else 0)))

@@ -4,6 +4,7 @@ This module only reads the local Library and pictures. It never imports a
 recognition model and never changes a prediction. Audio is delegated to the
 application via ``on_play(scientific_name)``.
 """
+from .i18n import is_english, result_message, species_name, tr
 from pathlib import Path
 from collections import OrderedDict
 import math
@@ -57,7 +58,7 @@ def _cover(image, size):
     return scaled.crop((x, y, x + w, y + h))
 
 
-def _text(value, missing="资料待补充"):
+def _text(value, missing=tr("资料待补充")):
     if value is None or value == "" or value == []:
         return missing
     if isinstance(value, (list, tuple)):
@@ -71,16 +72,16 @@ def _score(value):
     try:
         return f"{float(value) * 100:.1f}%"
     except (TypeError, ValueError):
-        return "未提供"
+        return tr("未提供")
 
 
 def _date(value):
-    return str(value or "未记录时间").replace("T", " ")[:19]
+    return str(value or tr("未记录时间")).replace("T", " ")[:19]
 
 
 def _photo_name(record):
     """User-facing title is independent of the immutable input filename."""
-    return str((record or {}).get("display_name") or "").strip() or "未命名照片"
+    return str((record or {}).get("display_name") or "").strip() or tr("未命名照片")
 
 
 def _bird_name(box):
@@ -90,13 +91,13 @@ def _bird_name(box):
                   (expert.get("class_index") is not None or expert.get("global_id", -1) != -1) and
                   expert.get("common_name"))
     if "prediction_source" in box:
-        return (box.get("common_name") or box.get("scientific_name") or "鸟种未确认", box.get("scientific_name") or "",
-                box.get("classification_confidence"), box.get("prediction_source", "模型预测"))
+        return (box.get("common_name") or box.get("scientific_name") or tr("鸟种未确认"), box.get("scientific_name") or "",
+                box.get("classification_confidence"), box.get("prediction_source", tr("模型预测")))
     if use_expert:
         return (expert["common_name"], expert.get("scientific_name", ""),
-                expert.get("confidence"), "柳莺专项复核")
-    return (box.get("original_name") or "鸟种未确认", box.get("original_scientific_name", ""),
-            box.get("original_confidence"), "原双路分类结果")
+                expert.get("confidence"), tr("柳莺专项复核"))
+    return (box.get("original_name") or tr("鸟种未确认"), box.get("original_scientific_name", ""),
+            box.get("original_confidence"), tr("原双路分类结果"))
 
 
 class _ScrollFrame(tk.Frame):
@@ -125,7 +126,7 @@ class _ImageViewer(tk.Toplevel):
         with Image.open(path) as source:
             decoded = ImageOps.exif_transpose(source).convert("RGB")
         super().__init__(parent)
-        self.title(title or "查看图片")
+        self.title(title or tr("查看图片"))
         self.configure(background="#20271b")
         self.source = decoded
         self.zoom = 1.
@@ -140,14 +141,14 @@ class _ImageViewer(tk.Toplevel):
         toolbar = tk.Frame(self, background=PAPER)
         toolbar.pack(fill="x")
         self.scale_text = tk.StringVar(self, "")
-        for label, command in (("适应窗口", self.fit), ("原始大小", lambda: self.set_zoom(1.)),
+        for label, command in ((tr("适应窗口"), self.fit), (tr("原始大小"), lambda: self.set_zoom(1.)),
                                ("－", lambda: self.set_zoom(self.zoom / 1.25)),
                                ("＋", lambda: self.set_zoom(self.zoom * 1.25))):
             tk.Button(toolbar, text=label, command=command, relief="flat", background=CARD,
                       foreground=GREEN, font=(family, 10), padx=13, pady=8).pack(side="left", padx=3, pady=6)
         tk.Label(toolbar, textvariable=self.scale_text, background=PAPER, foreground=SOFT,
                  font=(family, 10)).pack(side="left", padx=12)
-        tk.Label(toolbar, text="滚轮缩放 · 拖动平移 · Esc关闭", background=PAPER, foreground=SOFT,
+        tk.Label(toolbar, text=tr("滚轮缩放 · 拖动平移 · Esc关闭"), background=PAPER, foreground=SOFT,
                  font=(family, 10)).pack(side="right", padx=15)
         frame = tk.Frame(self, background="#20271b")
         frame.pack(fill="both", expand=True)
@@ -247,7 +248,7 @@ class LibraryWindow:
         self.on_play = on_play
         self.on_use_hero = on_use_hero
         self.window = tk.Toplevel(parent)
-        self.window.title("某种柳莺 · 本地图鉴与档案")
+        self.window.title(tr("某种柳莺 · 本地图鉴与档案"))
         self.window.configure(background=PAPER)
         width = min(1180, max(900, self.window.winfo_screenwidth() - 100))
         height = min(820, max(640, self.window.winfo_screenheight() - 110))
@@ -297,6 +298,10 @@ class LibraryWindow:
         self.window.protocol("WM_DELETE_WINDOW", self.close)
         self.refresh(result=result)
         self.select_tab(initial_tab)
+
+    @property
+    def has_unsaved_edits(self):
+        return self._metadata_dirty
 
     def _configure_style(self):
         self.style = ttk.Style(self.window)
@@ -363,7 +368,7 @@ class LibraryWindow:
         bar = tk.Frame(self.window, background=PAPER)
         bar.pack(fill="x", padx=24, pady=(14, 10))
         self._tab_buttons = {}
-        for key, text in (("species", "鸟种卡"), ("records", "翻翻档案"), ("certificate", "鉴定证书")):
+        for key, text in (("species", tr("鸟种卡")), ("records", tr("翻翻档案")), ("certificate", tr("鉴定证书"))):
             pill = tk.Label(bar, text=text, font=(self.family, 11, "bold"), padx=20, pady=7, cursor="hand2",
                             background=PAPER, foreground=SOFT, highlightthickness=1, highlightbackground=LINE)
             pill.pack(side="left", padx=(0, 8))
@@ -377,10 +382,10 @@ class LibraryWindow:
         self.certificate_tab = tk.Frame(self.notebook, background=PAPER)
         self.tabs = {"species": self.species_tab, "records": self.records_tab,
                      "certificate": self.certificate_tab}
-        self.notebook.add(self.species_tab, text="鸟种卡")
-        self.notebook.add(self.records_tab, text="翻翻档案")
-        self.notebook.add(self.certificate_tab, text="鉴定证书")
-        footer = self._label(self.window, "逐鸟计次不等于独立个体或人工确认；分数不等于正确率。鸟种分布资料不代表照片拍摄地。",
+        self.notebook.add(self.species_tab, text=tr("鸟种卡"))
+        self.notebook.add(self.records_tab, text=tr("翻翻档案"))
+        self.notebook.add(self.certificate_tab, text=tr("鉴定证书"))
+        footer = self._label(self.window, tr("逐鸟计次不等于独立个体或人工确认；分数不等于正确率。鸟种分布资料不代表照片拍摄地。"),
                              8, "#8a8f74", wraplength=1050)
         footer.pack(side="bottom", before=self.notebook, fill="x", padx=24, pady=(0, 12))
         footer.bind("<Configure>", lambda event: footer.configure(wraplength=max(500, event.width - 8)))
@@ -421,10 +426,15 @@ class LibraryWindow:
             image.paste(base.crop((base.width-right, 0, base.width, base.height)), (width-right, 0))
             if base.height != height:
                 image = image.resize((width, height), Image.Resampling.BILINEAR)
+            if is_english():
+                # Reuse the banner's plain field behind the English wordmark.
+                image.paste(mid.crop((0, 0, 1, mid.height)).resize((left, height)), (0, 0))
+                wordmark = art.green_title("Some Phylloscopus", 24, art.serif_italic(24))
+                image.alpha_composite(wordmark, (24, (height - wordmark.height) // 2))
             d = ImageDraw.Draw(image)
             # stat chips on the right
             parts = [p.strip() for p in self.summary.get().split("·") if p.strip()]
-            chip_font, x = art.font(13), int(width * .65)
+            chip_font, x = art.font(13), int(width * (.71 if is_english() else .65))
             for text in reversed(parts):
                 box = d.textbbox((0, 0), text, font=chip_font)
                 cw, ch = box[2] - box[0] + 30, 34
@@ -441,7 +451,7 @@ class LibraryWindow:
             self.banner.create_image(0, 0, anchor="nw", image=self._banner_photo)
         except Exception:
             self.banner.delete("all")
-            self.banner.create_text(26, height // 2, anchor="w", text="柳莺的本地档案", fill="#e8f0d0",
+            self.banner.create_text(26, height // 2, anchor="w", text=tr("柳莺的本地档案"), fill="#e8f0d0",
                                     font=(self.family, 22, "bold"))
 
     def _sync_tabs(self):
@@ -505,7 +515,7 @@ class LibraryWindow:
         groups = tk.Frame(self.species_tab, background=PAPER)
         groups.pack(fill="x", pady=(10, 0))
         self._species_group_buttons = {}
-        for key, title in (("willow", "柳莺"), ("other", "非柳莺")):
+        for key, title in (("willow", tr("柳莺")), ("other", tr("非柳莺"))):
             pill = tk.Label(groups, text=title, font=(self.family, 11, "bold"),
                             padx=18, pady=6, cursor="hand2", takefocus=True,
                             background=CARD, foreground=GREEN, highlightthickness=1,
@@ -514,21 +524,21 @@ class LibraryWindow:
             for event in ("<Button-1>", "<Return>", "<space>"):
                 pill.bind(event, lambda e, group=key: self._select_species_group(group))
             self._species_group_buttons[key] = pill
-        self._species_group_notice = self._label(self.species_tab, NON_WILLOW_NOTE, 10, SOFT,
+        self._species_group_notice = self._label(self.species_tab, tr(NON_WILLOW_NOTE), 10, SOFT,
                                                  anchor="w", justify="left", wraplength=1000)
         self._species_group_notice.bind("<Configure>", lambda event:
             self._species_group_notice.configure(wraplength=max(240, event.width - 10)))
         toolbar = tk.Frame(self.species_tab, background=PAPER)
         self._species_toolbar = toolbar
         toolbar.pack(fill="x", pady=(12, 10))
-        self._label(toolbar, "找一种鸟", 10, SOFT).pack(side="left", padx=(2, 10))
+        self._label(toolbar, tr("找一种鸟"), 10, SOFT).pack(side="left", padx=(2, 10))
         self.query = tk.StringVar(self.window, "")
         entry = ttk.Entry(toolbar, textvariable=self.query, width=35, font=(self.family, 11),
                           style=f"{self.prefix}.TEntry")
         entry.pack(side="left", ipady=5)
         self.query.trace_add("write", lambda *args: self._schedule_search("species"))
         self.only_seen = tk.BooleanVar(self.window, False)
-        tk.Checkbutton(toolbar, text="只看有记录的鸟种", variable=self.only_seen,
+        tk.Checkbutton(toolbar, text=tr("只看有记录的鸟种"), variable=self.only_seen,
                        command=self._refresh_species, background=PAPER, foreground=SOFT,
                        activebackground=PAPER, selectcolor="#ffffff", highlightthickness=0, bd=0,
                        font=(self.family, 10), cursor="hand2").pack(side="left", padx=15)
@@ -550,24 +560,24 @@ class LibraryWindow:
         toolbar = tk.Frame(self.records_tab, background=PAPER)
         toolbar.grid(row=0, column=0, sticky="ew", pady=12)
         toolbar.columnconfigure(1, weight=1)
-        self._label(toolbar, "搜索照片或鸟种", 10, SOFT).grid(row=0, column=0, padx=(0, 10))
+        self._label(toolbar, tr("搜索照片或鸟种"), 10, SOFT).grid(row=0, column=0, padx=(0, 10))
         self.record_query = tk.StringVar(self.window, "")
         ttk.Entry(toolbar, textvariable=self.record_query, width=35, style=f"{self.prefix}.TEntry",
                   font=(self.family, 11)).grid(row=0, column=1, sticky="ew", ipady=5)
         self.record_query.trace_add("write", lambda *args: self._schedule_search("records"))
-        self.use_hero_button = self._button(toolbar, "用作首页观鸟图", self.use_selected_hero)
+        self.use_hero_button = self._button(toolbar, tr("用作首页观鸟图"), self.use_selected_hero)
         self.use_hero_button.grid(row=0, column=2, padx=(10, 6))
-        self.undo_delete_button = self._button(toolbar, "撤回删除", self.undo_last_delete)
+        self.undo_delete_button = self._button(toolbar, tr("撤回删除"), self.undo_last_delete)
         self.undo_delete_button.grid(row=0, column=3, padx=(0, 6))
-        self._button(toolbar, "刷新", self.refresh).grid(row=0, column=4)
+        self._button(toolbar, tr("刷新"), self.refresh).grid(row=0, column=4)
         tree_frame = tk.Frame(self.records_tab, background=PAPER)
         tree_frame.grid(row=1, column=0, sticky="nsew")
         columns = ("date", "photo", "birds", "place", "captured", "summary")
         self.record_tree = ttk.Treeview(tree_frame, columns=columns, show="headings",
                                        style=f"{self.prefix}.Treeview", selectmode="extended", height=5)
-        for key, title, width in (("date", "识别时间", 145), ("photo", "照片名称", 200),
-                                  ("birds", "鸟框数", 65), ("place", "拍摄地点", 135),
-                                  ("captured", "拍摄时间", 145), ("summary", "识别摘要", 280)):
+        for key, title, width in (("date", tr("识别时间"), 145), ("photo", tr("照片名称"), 200),
+                                  ("birds", tr("鸟框数"), 65), ("place", tr("拍摄地点"), 135),
+                                  ("captured", tr("拍摄时间"), 145), ("summary", tr("识别摘要"), 280)):
             self.record_tree.heading(key, text=title)
             self.record_tree.column(key, width=width, minwidth=55, stretch=key in ("photo", "summary"))
         bar = ttk.Scrollbar(tree_frame, orient="vertical", command=self.record_tree.yview)
@@ -587,19 +597,19 @@ class LibraryWindow:
         bottom = tk.Frame(self.records_tab, background=PAPER)
         bottom.grid(row=3, column=0, sticky="ew", pady=12)
         bottom.columnconfigure(0, weight=1)
-        self.record_hint = tk.StringVar(self.window, "Ctrl / Shift 可多选；Delete 删除，Ctrl+Z 撤回。")
+        self.record_hint = tk.StringVar(self.window, tr("Ctrl / Shift 可多选；Delete 删除，Ctrl+Z 撤回。"))
         hint = self._label(bottom, "", 10, SOFT, textvariable=self.record_hint,
                            anchor="w", wraplength=550, justify="left")
         hint.grid(row=0, column=0, sticky="ew", padx=(0, 12))
-        self.open_certificate_button = self._button(bottom, "查看这份鉴定证书", self._open_selected_event, True)
+        self.open_certificate_button = self._button(bottom, tr("查看这份鉴定证书"), self._open_selected_event, True)
         self.open_certificate_button.grid(row=0, column=2, sticky="e")
-        self.delete_record_button = self._button(bottom, "删除所选记录", self.delete_selected_record)
+        self.delete_record_button = self._button(bottom, tr("删除所选记录"), self.delete_selected_record)
         self.delete_record_button.configure(foreground="#9c4535")
         self.delete_record_button.grid(row=0, column=1, sticky="e", padx=(0, 10))
-        self.record_compare_button = self._button(bottom, "识别对比", self._compare_record)
+        self.record_compare_button = self._button(bottom, tr("识别对比"), self._compare_record)
         self.record_compare_button.grid(row=0, column=3, sticky="e", padx=(10, 0))
         hint.bind("<Configure>", lambda event: hint.configure(wraplength=max(80, event.width)))
-        self.source_filename = tk.StringVar(self.window, "来源文件：先选择一条档案")
+        self.source_filename = tk.StringVar(self.window, tr("来源文件：先选择一条档案"))
         self.source_filename_label = self._label(self.records_tab, "", 8, "#8a8f74",
             textvariable=self.source_filename, anchor="w", wraplength=1080, justify="left")
         self.source_filename_label.grid(row=4, column=0, sticky="ew", padx=2, pady=(0, 4))
@@ -610,7 +620,7 @@ class LibraryWindow:
         panel = tk.Frame(self.records_tab, background=CARD, highlightthickness=1, highlightbackground=LINE)
         panel.grid(row=2, column=0, sticky="ew", pady=(12, 0))
         tk.Frame(panel, background=ACCENT, height=3).grid(row=0, column=0, columnspan=5, sticky="new")
-        self.capture_selection = tk.StringVar(self.window, "照片信息 · 先选一条档案")
+        self.capture_selection = tk.StringVar(self.window, tr("照片信息 · 先选一条档案"))
         title = self._label(panel, "", 10, GREEN, True, textvariable=self.capture_selection,
                             anchor="w", wraplength=900)
         title.grid(row=0, column=0, columnspan=5, sticky="ew", padx=14, pady=(10, 7))
@@ -621,32 +631,32 @@ class LibraryWindow:
         self.photo_name.trace_add("write", self._metadata_changed)
         self.capture_place.trace_add("write", self._metadata_changed)
         self.captured_at.trace_add("write", self._metadata_changed)
-        self._label(panel, "照片名称", 10, SOFT).grid(row=1, column=0, padx=(14, 8), sticky="w")
+        self._label(panel, tr("照片名称"), 10, SOFT).grid(row=1, column=0, padx=(14, 8), sticky="w")
         self.photo_name_entry = ttk.Entry(panel, textvariable=self.photo_name, font=(self.family, 10),
                                           style=f"{self.prefix}.TEntry")
         self.photo_name_entry.grid(row=1, column=1, columnspan=3, sticky="ew", pady=(0, 8))
-        self._label(panel, "拍摄地点", 10, SOFT).grid(row=2, column=0, padx=(14, 8), sticky="w")
+        self._label(panel, tr("拍摄地点"), 10, SOFT).grid(row=2, column=0, padx=(14, 8), sticky="w")
         self.place_entry = ttk.Entry(panel, textvariable=self.capture_place, font=(self.family, 10),
                                      style=f"{self.prefix}.TEntry")
         self.place_entry.grid(row=2, column=1, sticky="ew")
-        self._label(panel, "拍摄时间", 10, SOFT).grid(row=2, column=2, padx=(16, 8), sticky="w")
+        self._label(panel, tr("拍摄时间"), 10, SOFT).grid(row=2, column=2, padx=(16, 8), sticky="w")
         date_frame = tk.Frame(panel, background=CARD)
         date_frame.grid(row=2, column=3, sticky="ew")
         self.capture_time_entry = ttk.Entry(date_frame, textvariable=self.captured_at, width=16, state="readonly",
                                             font=(self.family, 10), style=f"{self.prefix}.TEntry")
         self.capture_time_entry.pack(side="left", fill="x", expand=True)
         self.capture_time_entry.bind("<Button-1>", self.open_calendar)
-        self.capture_calendar_button = self._button(date_frame, "日历", self.open_calendar)
+        self.capture_calendar_button = self._button(date_frame, tr("日历"), self.open_calendar)
         self.capture_calendar_button.pack(side="left", padx=(5, 0))
-        self.save_capture_button = self._button(panel, "保存照片信息", self.save_capture_metadata, True)
+        self.save_capture_button = self._button(panel, tr("保存照片信息"), self.save_capture_metadata, True)
         self.save_capture_button.grid(row=1, column=4, rowspan=2, padx=14)
-        self._label(panel, "备注", 10, SOFT).grid(row=3, column=0, padx=(14, 8), sticky="nw", pady=(7, 0))
+        self._label(panel, tr("备注"), 10, SOFT).grid(row=3, column=0, padx=(14, 8), sticky="nw", pady=(7, 0))
         self.notes_text = tk.Text(panel, height=2, font=(self.family, 10), background="white", foreground=INK,
                                   relief="flat", highlightthickness=1, highlightbackground=LINE,
                                   wrap="word", undo=True)
         self.notes_text.grid(row=3, column=1, columnspan=3, sticky="ew", pady=(7, 8))
         self.notes_text.bind("<<Modified>>", self._notes_changed)
-        self.clear_capture_button = self._button(panel, "清空输入", self.clear_capture_inputs)
+        self.clear_capture_button = self._button(panel, tr("清空输入"), self.clear_capture_inputs)
         self.clear_capture_button.grid(row=3, column=4, padx=14, pady=(2, 8), sticky="e")
         panel.columnconfigure(1, weight=1)
         panel.columnconfigure(3, weight=1)
@@ -699,14 +709,14 @@ class LibraryWindow:
         self.notes_text.edit_modified(False)
         self._metadata_loading = False
         self._metadata_dirty = False
-        self.capture_selection.set("照片信息 · " + _photo_name(detail) if detail else
-                                   "照片信息 · 先选一条档案")
+        self.capture_selection.set(tr("照片信息 · ") + _photo_name(detail) if detail else
+                                   tr("照片信息 · 先选一条档案"))
         if multiple:
-            self.capture_selection.set(f"已选 {len(self.record_tree.selection())} 条档案 · 可批量删除；编辑请单选")
-        self.source_filename.set("来源文件：" + str(detail.get("source_name") or "未记录") if detail else
-                                 "来源文件：先选择一条档案")
+            self.capture_selection.set(tr("已选 {0} 条档案 · 可批量删除；编辑请单选").format(len(self.record_tree.selection())))
+        self.source_filename.set(tr("来源文件：") + str(detail.get("source_name") or tr("未记录")) if detail else
+                                 tr("来源文件：先选择一条档案"))
         if multiple:
-            self.source_filename.set(f"已选 {len(self.record_tree.selection())} 条档案；单选可查看各自来源文件。")
+            self.source_filename.set(tr("已选 {0} 条档案；单选可查看各自来源文件。").format(len(self.record_tree.selection())))
         state = "normal" if detail and not multiple else "disabled"
         for widget in (self.photo_name_entry, self.place_entry, self.capture_calendar_button, self.notes_text,
                        self.save_capture_button, self.clear_capture_button):
@@ -722,50 +732,50 @@ class LibraryWindow:
         self.capture_place.set("")
         self.captured_at.set("")
         self.notes_text.delete("1.0", "end")
-        self.record_hint.set("输入已清空；点击保存后才会更新档案。")
+        self.record_hint.set(tr("输入已清空；点击保存后才会更新档案。"))
 
     def save_capture_metadata(self, event=None):
         event_id = self._selected_event_id()
         if not event_id or len(self.record_tree.selection()) != 1:
-            self.record_hint.set("先选择一条照片记录，再填写名称、拍摄地点与时间。")
+            self.record_hint.set(tr("先选择一条照片记录，再填写名称、拍摄地点与时间。"))
             return
         try:
             self.library.update_event_metadata(event_id, capture_place=self.capture_place.get(),
                                                captured_at=self.captured_at.get(), display_name=self.photo_name.get(),
                                                notes=self.notes_text.get("1.0", "end-1c"))
         except Exception as exc:
-            messagebox.showerror("照片信息未保存", str(exc), parent=self.window)
+            messagebox.showerror(tr("照片信息未保存"), str(exc), parent=self.window)
             return
         self._metadata_dirty = False
         self.refresh()
         self.focus_archive(event_id)
-        self.record_hint.set("已保存，同一照片共用名称与拍摄信息；来源文件名保持不变。")
+        self.record_hint.set(tr("已保存，同一照片共用名称与拍摄信息；来源文件名保持不变。"))
 
     def delete_selected_record(self, event=None):
         ids = self._selected_event_ids()
         details = [self.library.event_detail(key) for key in ids]
         details = [item for item in details if item]
         if not details:
-            self.record_hint.set("先在档案中选择要删除的记录。")
+            self.record_hint.set(tr("先在档案中选择要删除的记录。"))
             return
         count = sum(item.get("bird_count", len(item.get("boxes") or [])) for item in details)
-        names = "、".join(_photo_name(item) for item in details[:3]) + ("等" if len(details) > 3 else "")
-        answer = messagebox.askyesno("删除所选档案？",
-            f"已选 {len(details)} 条记录：{names}\n共 {count} 个鸟框。\n\n原照片和结果文件保留；删除后可按 Ctrl+Z 撤回。",
+        names = "、".join(_photo_name(item) for item in details[:3]) + (tr("等") if len(details) > 3 else "")
+        answer = messagebox.askyesno(tr("删除所选档案？"),
+            tr("已选 {0} 条记录：{1}\n共 {2} 个鸟框。\n\n原照片和结果文件保留；删除后可按 Ctrl+Z 撤回。").format(len(details), names, count),
             parent=self.window, icon="warning", default="no")
         if not answer:
             return
         try:
             result = self.library.delete_events(ids)
         except Exception as exc:
-            messagebox.showerror("记录未删除", str(exc), parent=self.window)
+            messagebox.showerror(tr("记录未删除"), str(exc), parent=self.window)
             return
         if (getattr(self, "_certificate_result", None) or {}).get("event_id") in ids:
             self._certificate_result = None
         self._capture_event_id = None
         self._metadata_dirty = False
         self.refresh()
-        self.record_hint.set(f"已删除 {len(result.get('event_ids') or [])} 条档案；Ctrl+Z 可撤回，原照片未删除。")
+        self.record_hint.set(tr("已删除 {0} 条档案；Ctrl+Z 可撤回，原照片未删除。").format(len(result.get('event_ids') or [])))
         return "break"
 
     def _undo_shortcut(self, event=None):
@@ -779,11 +789,11 @@ class LibraryWindow:
         try:
             result = self.library.undo_delete()
         except Exception as exc:
-            messagebox.showerror("暂时无法撤回", str(exc), parent=self.window)
+            messagebox.showerror(tr("暂时无法撤回"), str(exc), parent=self.window)
             return
         if not result.get("restored"):
             self._ensure_tab("records")
-            self.record_hint.set("没有可以撤回的删除操作。")
+            self.record_hint.set(tr("没有可以撤回的删除操作。"))
             return
         self.select_tab("records")
         self.refresh()
@@ -792,11 +802,11 @@ class LibraryWindow:
         self.record_tree.selection_set(items)
         self._select_record()
         self.select_tab("records")
-        self.record_hint.set(f"已撤回删除，恢复 {len(ids)} 条档案。")
+        self.record_hint.set(tr("已撤回删除，恢复 {0} 条档案。").format(len(ids)))
 
     def use_selected_hero(self):
         if len(self.record_tree.selection()) != 1:
-            self.record_hint.set("请单选一张照片，再选择其中的鸟用作首页观鸟图。")
+            self.record_hint.set(tr("请单选一张照片，再选择其中的鸟用作首页观鸟图。"))
             return
         detail = self.library.event_detail(self._selected_event_id())
         if detail and self.on_use_hero:
@@ -829,7 +839,7 @@ class LibraryWindow:
         current = self.species_group.get()
         for key, pill in self._species_group_buttons.items():
             count = sum(_species_group(card) == key for card in cards)
-            title = "柳莺" if key == "willow" else "非柳莺"
+            title = tr("柳莺") if key == "willow" else tr("非柳莺")
             active = key == current
             pill.configure(text=f"{title} · {count}", background=GREEN if active else CARD,
                            foreground="white" if active else GREEN,
@@ -855,7 +865,7 @@ class LibraryWindow:
             self._selected_species = None
             self._shown_species_data = None
             self._clear(self.detail_scroll.body)
-            self._label(self.detail_scroll.body, "换个鸟名或关键词试试。", 12, SOFT).pack(pady=40)
+            self._label(self.detail_scroll.body, tr("换个鸟名或关键词试试。"), 12, SOFT).pack(pady=40)
         elif self._selected_species not in {item["scientific_name"] for item in self._cards}:
             self._cancel_default_detail()
             name = self._cards[0]["scientific_name"]
@@ -924,19 +934,19 @@ class LibraryWindow:
                 self._photo_metadata = art.load_photos()
             for photo in self._photo_metadata:
                 if not photo.get("user") and photo.get("species_cn") == species.get("common_name"):
-                    return photo["path"], f"图鉴照片 · {photo.get('author', '')} · {photo.get('license', '')}"
+                    return photo["path"], tr("图鉴照片 · {0} · {1}").format(photo.get('author', ''), photo.get('license', ''))
             path = self._resolve(species.get("image_path"))
             if path:
-                return path, "图鉴插图 · 《两岸三地50种柳莺类辨识》"
+                return path, tr("图鉴插图 · 《两岸三地50种柳莺类辨识》")
             plate = art.find_plate(species.get("scientific_name"), species.get("common_name"))
             if plate:
-                return plate.get("bird_path") or plate["path"], "图鉴插图 · 《两岸三地50种柳莺类辨识》"
+                return plate.get("bird_path") or plate["path"], tr("图鉴插图 · 《两岸三地50种柳莺类辨识》")
         except (OSError, ValueError, ImportError):
             pass
         path = self._resolve(species.get("representative_image"))
         if path:
-            return path, "本地识别裁图 · 鸟种待人工核实"
-        return None, "尚无本地图鉴图片"
+            return path, tr("本地识别裁图 · 鸟种待人工核实")
+        return None, tr("尚无本地图鉴图片")
 
     def _image(self, path, size, cover=False, radius=0, background=CARD):
         try:
@@ -1009,7 +1019,7 @@ class LibraryWindow:
             self._species_panels.clear()
             self._current_panel = self._shown_species_data = None
             self._clear(body)
-            self._label(body, "这条鸟种资料尚未建立。", 12, SOFT).pack(pady=30)
+            self._label(body, tr("这条鸟种资料尚未建立。"), 12, SOFT).pack(pady=30)
             return
         path, credit = self._reference_image(species)
         width = self.detail_scroll.canvas.winfo_width()
@@ -1058,12 +1068,12 @@ class LibraryWindow:
         title_row.columnconfigure(0, weight=1)
         names = tk.Frame(title_row, background=CARD)
         names.grid(row=0, column=0, sticky="ew")
-        compare_button = self._button(title_row, "识别对比", lambda: self._compare_birds([species]))
+        compare_button = self._button(title_row, tr("识别对比"), lambda: self._compare_birds([species]))
         compare_button.grid(row=0, column=1, sticky="e", padx=(8, 0))
-        name_label = self._label(names, species.get("common_name") or scientific_name, 26, GREEN, True, anchor="w")
+        name_label = self._label(names, species_name(species.get("common_name"), scientific_name), 26, GREEN, True, anchor="w")
         name_label.grid(row=0, column=0, sticky="w")
         willow = _species_group(species) == "willow"
-        badge = tk.Label(names, text="柳莺专项" if willow else "非柳莺 · 识别仅供参考", padx=10, pady=2,
+        badge = tk.Label(names, text=tr("柳莺专项") if willow else tr("非柳莺 · 识别仅供参考"), padx=10, pady=2,
                  background=SELECT if willow else MUTED, foreground=GREEN if willow else SOFT,
                  font=(self.family, 9, "bold"))
         badge.grid(row=0, column=1, sticky="w", padx=(12, 0))
@@ -1076,7 +1086,7 @@ class LibraryWindow:
         names.bind("<Configure>", fit_names)
         self._label(inner, scientific_name, 12, SOFT, anchor="w",
                     font=(self.family, 12, "italic")).pack(fill="x", pady=(2, 0))
-        self._label(inner, species.get("english_name") or "英文名待补充", 10, "#8a8f74", anchor="w").pack(fill="x")
+        self._label(inner, species.get("english_name") or tr("英文名待补充"), 10, "#8a8f74", anchor="w").pack(fill="x")
         # Let the image, title, and comparison button map before long field notes.
         pending = None
         def render():
@@ -1102,9 +1112,9 @@ class LibraryWindow:
         scientific_name = species["scientific_name"]
         stats = tk.Frame(inner, background=CARD)
         stats.pack(fill="x", pady=(14, 4))
-        for number, unit in ((int(species.get("observation_count") or 0), "次本地识别"),
-                             (int(species.get("image_count") or 0), "张照片"),
-                             (len(species.get("audio") or []), "段本地录音")):
+        for number, unit in ((int(species.get("observation_count") or 0), tr("次本地识别")),
+                             (int(species.get("image_count") or 0), tr("张照片")),
+                             (len(species.get("audio") or []), tr("段本地录音"))):
             box = tk.Frame(stats, background=STRIPE, highlightthickness=1, highlightbackground=LINE)
             box.pack(side="left", padx=(0, 10))
             tk.Label(box, text=str(number), background=STRIPE, foreground=GREEN,
@@ -1116,11 +1126,11 @@ class LibraryWindow:
         audio_row = tk.Frame(inner, background=CARD)
         audio_row.pack(fill="x", pady=(15, 0))
         audio = species.get("audio") or []
-        button = self._button(audio_row, "播放 / 停止鸟叫", lambda: self._play(scientific_name), True)
+        button = self._button(audio_row, tr("播放 / 停止鸟叫"), lambda: self._play(scientific_name), True)
         button.pack(side="left")
         if not audio or not self.on_play:
             button.configure(state="disabled", cursor="")
-        self._label(audio_row, "本地录音" if audio else "该鸟种暂无本地录音", 9, SOFT).pack(side="left", padx=12)
+        self._label(audio_row, tr("本地录音") if audio else tr("该鸟种暂无本地录音"), 9, SOFT).pack(side="left", padx=12)
         if audio:
             first = audio[0] if isinstance(audio, list) else audio
             if isinstance(first, dict):
@@ -1140,7 +1150,7 @@ class LibraryWindow:
             if title in {"分类与名称说明", "取食", "行为", "易混淆种", "保护信息", "季节信息", "录音说明", "观察要点"} and not value:
                 continue
             sections.append((title, value))
-        self._field_notes(inner, sections)
+        self._field_notes(inner, [(tr(title), value) for title, value in sections])
         observations = species.get("observations") or []
         places = list(dict.fromkeys(str(item.get("capture_place") or "").strip()
                                     for item in observations if str(item.get("capture_place") or "").strip()))
@@ -1148,15 +1158,15 @@ class LibraryWindow:
                     if item.get("captured_at")}
         summary = []
         if places:
-            summary.append("已记录拍摄地点：" + "、".join(places))
+            summary.append(tr("已记录拍摄地点：") + "、".join(places))
         if captured:
             times = sorted(captured.values())
-            summary.append(f"{len(captured)} 份档案填写了拍摄时间：" +
-                           (_date(times[0]) if times[0] == times[-1] else f"{_date(times[0])} 至 {_date(times[-1])}"))
-        self._section(inner, "本地拍摄信息", "\n".join(summary) if summary else
-                      "还没有填写拍摄地点或时间；可在「翻翻档案」选中照片后补充。")
-        self._section(inner, "最近的识别记录", "暂无本地记录" if not observations else
-                      "点击下面的记录，可查看当时的照片与逐鸟预测。")
+            summary.append(tr("{0} 份档案填写了拍摄时间：").format(len(captured)) +
+                           (_date(times[0]) if times[0] == times[-1] else tr("{0} 至 {1}").format(_date(times[0]), _date(times[-1]))))
+        self._section(inner, tr("本地拍摄信息"), "\n".join(summary) if summary else
+                      tr("还没有填写拍摄地点或时间；可在「翻翻档案」选中照片后补充。"))
+        self._section(inner, tr("最近的识别记录"), tr("暂无本地记录") if not observations else
+                      tr("点击下面的记录，可查看当时的照片与逐鸟预测。"))
         recent = {}
         for index, observation in enumerate(observations):
             key = observation.get("event_id") or f"observation_{index}"
@@ -1165,13 +1175,13 @@ class LibraryWindow:
             recent[key]["_species_boxes"] += 1
         for observation in list(recent.values())[:8]:
             event_id = observation.get("event_id")
-            capture = _date(observation.get("captured_at")) if observation.get("captured_at") else "拍摄时间未填"
-            place = observation.get("capture_place") or "拍摄地点未填"
+            capture = _date(observation.get("captured_at")) if observation.get("captured_at") else tr("拍摄时间未填")
+            place = observation.get("capture_place") or tr("拍摄地点未填")
             text = _photo_name(observation) + f"\n{capture} · {place}"
             if observation.get("notes"):
-                text += "\n备注：" + str(observation["notes"])
+                text += tr("\n备注：") + str(observation["notes"])
             if observation["_species_boxes"] > 1:
-                text += f" · {observation['_species_boxes']} 个该鸟种记录"
+                text += tr(" · {0} 个该鸟种记录").format(observation['_species_boxes'])
             link = self._label(inner, text, 10, GREEN, anchor="w", cursor="hand2", justify="left", wraplength=500)
             link.pack(fill="x", pady=4)
             link.bind("<Configure>", lambda event, widget=link: widget.configure(wraplength=max(220, event.width - 5)))
@@ -1185,14 +1195,14 @@ class LibraryWindow:
         sources = list(sources)
         reference = species.get("reference_image") or {}
         if reference.get("source"):
-            sources.append({"url": reference["source"], "title": "参考图片来源 · " + str(reference.get("author") or "")})
+            sources.append({"url": reference["source"], "title": tr("参考图片来源 · ") + str(reference.get("author") or "")})
         if reference.get("license_url"):
-            sources.append({"url": reference["license_url"], "title": "参考图片许可 · " + str(reference.get("license") or "")})
+            sources.append({"url": reference["license_url"], "title": tr("参考图片许可 · ") + str(reference.get("license") or "")})
         for clip in species.get("audio") or []:
             if isinstance(clip, dict) and clip.get("source_url"):
                 sources.append({"url": clip["source_url"],
-                                "title": "录音来源 · " + str(clip.get("author") or clip.get("title") or "野外录音")})
-        self._section(parent, "资料来源", "图鉴文字为资料摘要；分类名称沿用当前模型标签。")
+                                "title": tr("录音来源 · ") + str(clip.get("author") or clip.get("title") or tr("野外录音"))})
+        self._section(parent, tr("资料来源"), tr("图鉴文字为资料摘要；分类名称沿用当前模型标签。"))
         for source in sources:
             if isinstance(source, dict):
                 url = source.get("url") or source.get("source_url")
@@ -1212,7 +1222,7 @@ class LibraryWindow:
             try:
                 self.on_play(scientific_name)
             except Exception as error:
-                messagebox.showerror("鸟叫暂时无法播放", str(error), parent=self.window)
+                messagebox.showerror(tr("鸟叫暂时无法播放"), str(error), parent=self.window)
 
     def _refresh_records(self):
         self._ensure_tab("records")
@@ -1231,8 +1241,8 @@ class LibraryWindow:
             self._events[item] = event_id
             self.record_tree.insert("", "end", iid=item, values=(
                 _date(record.get("created_at")), _photo_name(record),
-                record.get("bird_count", len(record.get("boxes") or [])), record.get("capture_place") or "未填写",
-                record.get("captured_at") or "未填写", record.get("message") or record.get("status", "")),
+                record.get("bird_count", len(record.get("boxes") or [])), record.get("capture_place") or tr("未填写"),
+                record.get("captured_at") or tr("未填写"), result_message(record.get("message")) or record.get("status", "")),
                 tags=("odd",) if index % 2 else ())
             if event_id in previous:
                 selected.append(item)
@@ -1241,8 +1251,8 @@ class LibraryWindow:
         if selected:
             self.record_tree.selection_set(selected)
         self._select_record()
-        self.record_hint.set(f"共 {len(records)} 条记录；Ctrl / Shift 多选，Delete 删除，Ctrl+Z 撤回。" if records else
-                             "还没有匹配的记录；新识别的结果会自动保存到这里。")
+        self.record_hint.set(tr("共 {0} 条记录；Ctrl / Shift 多选，Delete 删除，Ctrl+Z 撤回。").format(len(records)) if records else
+                             tr("还没有匹配的记录；新识别的结果会自动保存到这里。"))
 
     def _compare_birds(self, birds):
         if not birds:
@@ -1275,7 +1285,7 @@ class LibraryWindow:
         self._ensure_tab("records")
         detail = self.library.event_detail(event_id) if event_id is not None else None
         if not detail:
-            self.record_hint.set("这条档案已删除或暂不可用。")
+            self.record_hint.set(tr("这条档案已删除或暂不可用。"))
             self.select_tab("records")
             return
         self.record_query.set("")
@@ -1292,7 +1302,7 @@ class LibraryWindow:
                 self.record_tree.focus(item)
                 self.record_tree.see(item)
                 self._select_record()
-                self.record_hint.set("已定位这张照片，可在下方修改名称、拍摄地点与时间。")
+                self.record_hint.set(tr("已定位这张照片，可在下方修改名称、拍摄地点与时间。"))
                 break
 
     def show_event(self, event_id):
@@ -1327,17 +1337,17 @@ class LibraryWindow:
         label.bind("<space>", callback)
         self._certificate_images.append(label)
 
-    def _open_image(self, path, title="查看图片", parent=None):
+    def _open_image(self, path, title=tr("查看图片"), parent=None):
         try:
             path = Path(path).resolve()
             if not path.is_file():
-                raise FileNotFoundError("这张本地图片已移走。")
+                raise FileNotFoundError(tr("这张本地图片已移走。"))
             viewer = _ImageViewer(parent or self.window, path, title, self.family)
             self._viewers = [item for item in self._viewers if item.winfo_exists()]
             self._viewers.append(viewer)
             return viewer
         except (OSError, ValueError, tk.TclError) as exc:
-            messagebox.showerror("图片暂时无法打开", str(exc), parent=self.window)
+            messagebox.showerror(tr("图片暂时无法打开"), str(exc), parent=self.window)
             return None
 
     def _mousewheel(self, event):
@@ -1368,7 +1378,7 @@ class LibraryWindow:
     def refresh(self, result=None):
         self._dirty_tabs.update(self.tabs)
         species_count, count = self.library.card_counts()
-        summary = f"{species_count} 张鸟种卡  ·  {count} 次逐鸟记录"
+        summary = tr("{0} 张鸟种卡  ·  {1} 次逐鸟记录").format(species_count, count)
         if self.summary.get() != summary:
             self.summary.set(summary)
         if result is not None:

@@ -1,4 +1,5 @@
 """Offline date/time picker built with Tk and Python's calendar module."""
+from .i18n import tr
 import calendar
 from datetime import date, datetime
 import tkinter as tk
@@ -8,7 +9,7 @@ from tkinter import ttk
 class CalendarPicker(tk.Toplevel):
     def __init__(self, parent, value="", on_select=None, family="Microsoft YaHei UI"):
         super().__init__(parent)
-        self.title("选择拍摄日期与时间")
+        self.title(tr("选择拍摄日期与时间"))
         self.configure(background="#f6f3e2")
         self.resizable(False, False)
         self.transient(parent)
@@ -49,11 +50,11 @@ class CalendarPicker(tk.Toplevel):
         self.year_box = ttk.Combobox(header, textvariable=self.year, state="readonly", width=6,
                                      values=[str(year) for year in range(1900, 2101)])
         self.year_box.pack(side="left", padx=(8, 3))
-        tk.Label(header, text="年", background="#f6f3e2", foreground="#687052").pack(side="left")
+        tk.Label(header, text=tr("年"), background="#f6f3e2", foreground="#687052").pack(side="left")
         self.month_box = ttk.Combobox(header, textvariable=self.month, state="readonly", width=4,
                                       values=[f"{month:02d}" for month in range(1, 13)])
         self.month_box.pack(side="left", padx=(8, 3))
-        tk.Label(header, text="月", background="#f6f3e2", foreground="#687052").pack(side="left")
+        tk.Label(header, text=tr("月"), background="#f6f3e2", foreground="#687052").pack(side="left")
         self._button(header, "›", lambda: self.move_month(1)).pack(side="right")
         self.year_box.bind("<<ComboboxSelected>>", lambda event: self._render_month())
         self.month_box.bind("<<ComboboxSelected>>", lambda event: self._render_month())
@@ -64,7 +65,7 @@ class CalendarPicker(tk.Toplevel):
                  font=(self.family, 10, "bold")).pack(fill="x", padx=15, pady=9)
         time_row = tk.Frame(self, background="#f6f3e2")
         time_row.pack(fill="x", padx=14)
-        tk.Checkbutton(time_row, text="同时记录时分", variable=self.with_time, command=self._sync_time,
+        tk.Checkbutton(time_row, text=tr("同时记录时分"), variable=self.with_time, command=self._sync_time,
                        background="#f6f3e2", foreground="#687052", font=(self.family, 10)).pack(side="left")
         self.hour_box = ttk.Combobox(time_row, textvariable=self.hour, state="readonly", width=3,
                                      values=[f"{hour:02d}" for hour in range(24)])
@@ -75,9 +76,9 @@ class CalendarPicker(tk.Toplevel):
         self.minute_box.pack(side="left", padx=2)
         actions = tk.Frame(self, background="#f6f3e2")
         actions.pack(fill="x", padx=14, pady=14)
-        self._button(actions, "不确定 / 清除", self.clear).pack(side="left")
-        self._button(actions, "今天", self.choose_today).pack(side="left", padx=7)
-        self._button(actions, "确定", self.confirm).pack(side="right")
+        self._button(actions, tr("不确定 / 清除"), self.clear).pack(side="left")
+        self._button(actions, tr("今天"), self.choose_today).pack(side="left", padx=7)
+        self._button(actions, tr("确定"), self.confirm).pack(side="right")
 
     def _sync_time(self):
         state = "readonly" if self.with_time.get() else "disabled"
@@ -89,7 +90,7 @@ class CalendarPicker(tk.Toplevel):
             widget.destroy()
         self.day_buttons = {}
         year, month = int(self.year.get()), int(self.month.get())
-        for column, title in enumerate(("一", "二", "三", "四", "五", "六", "日")):
+        for column, title in enumerate((tr("一"), tr("二"), tr("三"), tr("四"), tr("五"), tr("六"), tr("日"))):
             tk.Label(self.days_frame, text=title, background="#f6f3e2", foreground="#687052",
                      font=(self.family, 10), width=4).grid(row=0, column=column, pady=5)
         for row, week in enumerate(calendar.Calendar(firstweekday=0).monthdayscalendar(year, month), 1):
@@ -100,7 +101,7 @@ class CalendarPicker(tk.Toplevel):
                     if self.selected_date == date(year, month, day):
                         button.configure(background="#466d2d", foreground="white")
                     self.day_buttons[day] = button
-        self.chosen.set("已选：" + self.selected_date.isoformat())
+        self.chosen.set(tr("已选：") + self.selected_date.isoformat())
 
     def move_month(self, amount):
         year, month = int(self.year.get()), int(self.month.get())

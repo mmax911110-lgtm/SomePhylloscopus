@@ -4,6 +4,7 @@ All recognition logic, routing and wording that carries scientific meaning
 (gate messages, OTHER, coverage notes) is passed through unchanged; only the
 packaging around it got silly.
 """
+from .i18n import progress_message, result_message, set_language, species_name, tr
 from copy import deepcopy
 import json
 import logging
@@ -12,7 +13,7 @@ import queue
 import random
 import threading
 import tkinter as tk
-from tkinter import filedialog, ttk, font as tkfont
+from tkinter import filedialog, messagebox, ttk, font as tkfont
 import time
 
 from . import art
@@ -21,6 +22,7 @@ from .scene import BirdScene, paint_branches
 
 DETECTION_MODES = {"普通整图": "normal", "分块补检": "tiled"}
 DEVICE_MODES = {"auto": "auto", "cuda": "cuda", "CPU（专项未验证）": "cpu"}
+LANGUAGE_OPTIONS = {"简体中文": "zh-CN", "English": "en"}
 GATE_LABELS = {"willow": "柳莺", "confirmed_willow": "柳莺", "not_willow": "非柳莺",
                "negative": "非柳莺", "uncertain": "无法确认", "unknown": "无法确认",
                "no_bird": "未发现鸟", "error": "识别失败",
@@ -115,12 +117,12 @@ def _specialist_names(result):
         expert = box.get("specialist") or {}
         if (box.get("gate_status") == "willow" and not expert.get("rejected_as_OTHER", True)
                 and (expert.get("class_index") is not None or expert.get("global_id", -1) != -1) and expert.get("common_name")):
-            names.append(str(expert["common_name"]))
+            names.append(species_name(expert["common_name"], expert.get("scientific_name")))
     return list(dict.fromkeys(names))
 
 
 def _specialist_outgroups(result):
-    return list(dict.fromkeys(box["specialist"]["common_name"] for box in (result or {}).get("boxes", [])
+    return list(dict.fromkeys(species_name(box["specialist"]["common_name"], box["specialist"].get("scientific_name")) for box in (result or {}).get("boxes", [])
         if (box.get("specialist") or {}).get("decision_kind") == "similar_non_willow"))
 
 
@@ -128,18 +130,18 @@ def bird_label(box):
     status = box.get("gate_status")
     expert = box.get("specialist") or {}
     if status == "willow_outside_coverage":
-        return "柳莺（覆盖外）"
+        return tr("柳莺（覆盖外）")
     if status == "willow":
         if expert.get("decision_kind") == "similar_non_willow":
-            return f"专项倾向组外：{expert['common_name']}"
+            return tr("专项倾向组外：{0}").format(species_name(expert["common_name"], expert.get("scientific_name")))
         if expert and not expert.get("rejected_as_OTHER") and (expert.get("class_index") is not None or expert.get("global_id", -1) != -1) and expert.get("common_name"):
-            return f"柳莺！专项猜：{expert['common_name']}"
-        return "柳莺！具体哪种：某种"
+            return tr("柳莺！专项猜：{0}").format(species_name(expert["common_name"], expert.get("scientific_name")))
+        return tr("柳莺！具体哪种：某种")
     if status == "not_willow":
-        return "根本没有这种柳莺"
+        return tr("根本没有这种柳莺")
     if status in ("uncertain", "unknown"):
-        return "薛定谔的柳莺"
-    return box.get("gate_message") or GATE_LABELS.get(status, status or "无法确认")
+        return tr("薛定谔的柳莺")
+    return result_message(box.get("gate_message") or GATE_LABELS.get(status, status or "无法确认"))
 
 
 class RecognitionWorker(threading.Thread):
@@ -208,7 +210,7 @@ class WillowApplication:
         self.release_info = None
         self._release_result = None
         self._release_pending = False
-        self._release_dialog = None
+        self._settings_dialog = None
         self._release_timer = None
         try:
             self.release_info = release.ReleaseInfo.load(self.app_root)
@@ -220,20 +222,24 @@ class WillowApplication:
                 settings = json.loads(self.settings_path.read_text(encoding="utf-8"))
             except (OSError, ValueError):
                 self.logger.warning("无法读取设置，使用默认值")
+        self.settings = settings if isinstance(settings, dict) else {}
+        settings = self.settings
+        self.language = set_language(settings.get("language"), art.ASSETS / "species_catalog.json")
+        self.restart_language = False
+        self.detection_choices = {tr(label): label for label in DETECTION_MODES}
+        self.device_choices = {tr(label): mode for label, mode in DEVICE_MODES.items()}
         self.package = tk.StringVar(window, str(self.config.get("_resolved_package_root") or
                                                settings.get("package_root") or package_root or ""))
         saved_device = settings.get("device", "auto")
-        self.device = tk.StringVar(window, "CPU（专项未验证）" if saved_device == "cpu" else saved_device)
-        self.detection_mode = tk.StringVar(window, settings.get("detection_mode", "普通整图"))
-        if self.device.get() not in DEVICE_MODES:
-            self.device.set("auto")
-        if self.detection_mode.get() not in DETECTION_MODES:
-            self.detection_mode.set("普通整图")
-        self.status = tk.StringVar(window, "投喂几张疑似柳莺的照片，再点「开始鉴定！」—— 每只鸟都会单独审问。")
+        device_label = next((label for label, mode in self.device_choices.items() if mode == saved_device), "auto")
+        self.device = tk.StringVar(window, device_label)
+        mode_label = settings.get("detection_mode", "普通整图")
+        self.detection_mode = tk.StringVar(window, tr(mode_label if mode_label in DETECTION_MODES else "普通整图"))
+        self.status = tk.StringVar(window, tr("投喂几张疑似柳莺的照片，再点「开始鉴定！」—— 每只鸟都会单独审问。"))
         self.audio_source = tk.StringVar(window, "")
         self.photo_message = tk.StringVar(window, "")
         self.verdict = tk.StringVar(window, "")
-        self.details = tk.StringVar(window, "先在左边点一张照片，再在「逐只审问」里点一只鸟。")
+        self.details = tk.StringVar(window, tr("先在左边点一张照片，再在「逐只审问」里点一只鸟。"))
         self._detail_lines = None
         self.jobs, self.results, self.active = {}, {}, set()
         self.batch_keys = []
@@ -285,7 +291,7 @@ class WillowApplication:
             self.scene = BirdScene(self)
         except Exception as exc:
             self.logger.warning("小鸟动画未启动：%s", exc)
-            self.title_img = art.brand_title(self._px(66))
+            self.title_img = self._brand_title()
         self.worker.start()
         self.poll_id = self.window.after(40, self._poll)
         self._anim_id = self.window.after(450, self._animate)
@@ -300,6 +306,12 @@ class WillowApplication:
     # ================================================================ UI build
     def _px(self, value):
         return int(round(value * self.s))
+
+    def _brand_title(self, without_bird=False):
+        if self.language == "en":
+            size = self._px(34)
+            return art.green_title("Some Phylloscopus", size, art.serif_italic(size))
+        return art.brand_title(self._px(66), without_bird=without_bird)
 
     def _setup_style(self):
         w = self.window
@@ -395,7 +407,7 @@ class WillowApplication:
 
     def _build_ui(self):
         w = self.window
-        w.title("某种柳莺 · 柳莺鉴定所")
+        w.title(tr("某种柳莺 · 柳莺鉴定所"))
         w.configure(background="#26301a")
         self.s = max(1.0, float(w.tk.call("tk", "scaling")) * 72 / 96)
         # default window grows with DPI / big screens, never beyond the screen
@@ -433,7 +445,7 @@ class WillowApplication:
         self.bg = tk.Canvas(w, highlightthickness=0, bd=0, background="#26301a")
         self.bg.place(x=0, y=0, relwidth=1, relheight=1)
         self.bg_item = self.bg.create_image(0, 0, anchor="nw")
-        self.title_img = art.brand_title(P(66), without_bird=True)
+        self.title_img = self._brand_title(without_bird=True)
         families = set(tkfont.families(w))
         serif = next((f for f in ("Georgia", "Times New Roman", "Liberation Serif", "DejaVu Serif") if f in families), self.family)
         self.sub_items = self._shadow_text(P(20), 0, "Phylloscopus sp.", (serif, 15, "italic"), "#e9f1d2")
@@ -447,13 +459,13 @@ class WillowApplication:
         # ------------- toolbar card: one row of big buttons + a rotating tip
         self.toolbar = self._card()
         go, meme, stop = self.btn_style["Go"], self.btn_style["Meme"], self.btn_style["Stop"]
-        self.add_button = ttk.Button(self.toolbar, text="找到鸟了！", style=meme, command=self.choose_images, takefocus=False)
-        self.start_button = ttk.Button(self.toolbar, text="开始鉴定！", style=go, command=self.start_batch, takefocus=False)
-        self.cancel_button = ttk.Button(self.toolbar, text="算了不认了", style=stop, command=self.cancel_pending,
+        self.add_button = ttk.Button(self.toolbar, text=tr("找到鸟了！"), style=meme, command=self.choose_images, takefocus=False)
+        self.start_button = ttk.Button(self.toolbar, text=tr("开始鉴定！"), style=go, command=self.start_batch, takefocus=False)
+        self.cancel_button = ttk.Button(self.toolbar, text=tr("算了不认了"), style=stop, command=self.cancel_pending,
                                         state="disabled", takefocus=False)
-        self.clear_button = ttk.Button(self.toolbar, text="全部放生", style=meme, command=self.clear_jobs, takefocus=False)
-        self.report_button = ttk.Button(self.toolbar, text="鉴定证书", style=meme, command=self.open_report, takefocus=False)
-        self.results_button = ttk.Button(self.toolbar, text="翻翻档案", style=meme, command=self.open_results, takefocus=False)
+        self.clear_button = ttk.Button(self.toolbar, text=tr("全部放生"), style=meme, command=self.clear_jobs, takefocus=False)
+        self.report_button = ttk.Button(self.toolbar, text=tr("鉴定证书"), style=meme, command=self.open_report, takefocus=False)
+        self.results_button = ttk.Button(self.toolbar, text=tr("翻翻档案"), style=meme, command=self.open_results, takefocus=False)
         gaps = (P(10), P(22), P(10), P(22), P(10), 0)   # extra air between button groups
         for i, button in enumerate((self.add_button, self.start_button, self.cancel_button,
                                     self.clear_button, self.report_button, self.results_button)):
@@ -467,13 +479,13 @@ class WillowApplication:
         self.left = self._card()
         self.left.columnconfigure(0, weight=1)
         self.left.rowconfigure(1, weight=1)
-        ttk.Label(self.left, text="嫌疑鸟名单", style="Head.TLabel").grid(row=0, column=0, sticky="w", pady=(0, P(6)))
+        ttk.Label(self.left, text=tr("嫌疑鸟名单"), style="Head.TLabel").grid(row=0, column=0, sticky="w", pady=(0, P(6)))
         self.count_label = ttk.Label(self.left, text="", style="Soft.TLabel")
         self.count_label.grid(row=0, column=0, columnspan=2, sticky="e", pady=(0, P(6)))
         self.photo_tree = ttk.Treeview(self.left, columns=("photo", "state"), show="headings", selectmode="browse",
                                        height=4, style=self.tree_style)
-        self.photo_tree.heading("photo", text="照片")
-        self.photo_tree.heading("state", text="状态")
+        self.photo_tree.heading("photo", text=tr("照片"))
+        self.photo_tree.heading("state", text=tr("状态"))
         self.photo_tree.column("photo", width=P(130), minwidth=P(80))
         self.photo_tree.column("state", width=P(70), minwidth=P(55), stretch=False, anchor="center")
         self.photo_tree.grid(row=1, column=0, sticky="nsew")
@@ -488,17 +500,17 @@ class WillowApplication:
         # ------------- settings card (left, under the list)
         self.settings_card = self._card()
         self.settings_card.columnconfigure(1, weight=1)
-        ttk.Label(self.settings_card, text="鉴定设置", style="Head.TLabel").grid(row=0, column=0, columnspan=2, sticky="w")
-        self.package_button = ttk.Button(self.settings_card, text="模型包在哪…", style=meme,
+        ttk.Label(self.settings_card, text=tr("鉴定设置"), style="Head.TLabel").grid(row=0, column=0, columnspan=2, sticky="w")
+        self.package_button = ttk.Button(self.settings_card, text=tr("模型包在哪…"), style=meme,
                                          command=self.choose_package, takefocus=False)
         self.package_button.grid(row=0, column=0, columnspan=2, sticky="e", pady=(0, P(6)))
-        ttk.Label(self.settings_card, text="找鸟方式", style="Card.TLabel").grid(row=1, column=0, sticky="w")
+        ttk.Label(self.settings_card, text=tr("找鸟方式"), style="Card.TLabel").grid(row=1, column=0, sticky="w")
         self.mode_box = ttk.Combobox(self.settings_card, textvariable=self.detection_mode,
-            values=list(DETECTION_MODES), state="readonly", width=10, font=self.f_body)
+            values=list(self.detection_choices), state="readonly", width=10, font=self.f_body)
         self.mode_box.grid(row=1, column=1, sticky="ew", padx=(P(10), 0), pady=(0, P(6)))
-        ttk.Label(self.settings_card, text="算力来源", style="Card.TLabel").grid(row=2, column=0, sticky="w")
+        ttk.Label(self.settings_card, text=tr("算力来源"), style="Card.TLabel").grid(row=2, column=0, sticky="w")
         self.device_box = ttk.Combobox(self.settings_card, textvariable=self.device,
-            values=list(DEVICE_MODES), state="readonly", width=10, font=self.f_body)
+            values=list(self.device_choices), state="readonly", width=10, font=self.f_body)
         self.device_box.grid(row=2, column=1, sticky="ew", padx=(P(10), 0))
 
         # ------------- preview card
@@ -524,11 +536,11 @@ class WillowApplication:
         self.birds_card = self._card()
         self.birds_card.columnconfigure(0, weight=1)
         self.birds_card.rowconfigure(1, weight=1)
-        ttk.Label(self.birds_card, text="逐只审问", style="Head.TLabel").grid(row=0, column=0, sticky="w", pady=(0, P(6)))
+        ttk.Label(self.birds_card, text=tr("逐只审问"), style="Head.TLabel").grid(row=0, column=0, sticky="w", pady=(0, P(6)))
         self.bird_tree = ttk.Treeview(self.birds_card, columns=("bird", "state"), show="headings",
                                       selectmode="browse", height=3, style=self.tree_style)
-        self.bird_tree.heading("bird", text="编号")
-        self.bird_tree.heading("state", text="审问结果")
+        self.bird_tree.heading("bird", text=tr("编号"))
+        self.bird_tree.heading("state", text=tr("审问结果"))
         self.bird_tree.column("bird", width=P(60), stretch=False, anchor="center")
         self.bird_tree.column("state", width=P(170), minwidth=P(100))
         self.bird_tree.grid(row=1, column=0, sticky="nsew")
@@ -544,7 +556,7 @@ class WillowApplication:
         self.detail_card = self._card()
         self.detail_card.columnconfigure(1, weight=1)
         self.detail_card.rowconfigure(1, weight=1)
-        ttk.Label(self.detail_card, text="鉴定卡", style="Head.TLabel").grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, P(6)))
+        ttk.Label(self.detail_card, text=tr("鉴定卡"), style="Head.TLabel").grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, P(6)))
         self.crop = tk.Canvas(self.detail_card, background=CARD, highlightthickness=0, height=P(100), width=P(112))
         self.crop.grid(row=1, column=0, sticky="n", padx=(0, P(10)))
         self.detail_label = tk.Text(self.detail_card, height=4, width=20, wrap="word", font=self.f_body,
@@ -571,16 +583,15 @@ class WillowApplication:
         self.status_label = tk.Label(self.footer, textvariable=self.status, background=CARD, foreground=INK,
                                      font=self.f_body, anchor="w", justify="left", wraplength=P(980))
         self.status_label.grid(row=0, column=0, sticky="ew")
-        version = "v" + self.release_info.version if self.release_info else "版本"
-        self.release_button = ttk.Button(self.footer, text=f"{version} · 更新", command=self._open_release_dialog)
-        self.release_button.grid(row=0, column=1, sticky="e", padx=(P(8), 0))
+        self.settings_button = ttk.Button(self.footer, text=tr("设置"), style=meme, command=self._open_settings_dialog)
+        self.settings_button.grid(row=0, column=1, sticky="e", padx=(P(8), 0))
         self.audio_source_label = tk.Label(self.footer, textvariable=self.audio_source, background=CARD,
             foreground=INK_SOFT, font=(self.family, 8), anchor="w", justify="left", cursor="hand2")
         self.audio_source_label.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(2, 0))
         self.audio_source_label.bind("<Button-1>", self._show_audio_source)
 
         self._tip_index = random.randrange(len(TOOL_TIPS))
-        self.tip_label.configure(text=TOOL_TIPS[self._tip_index])
+        self.tip_label.configure(text=tr(TOOL_TIPS[self._tip_index]))
         self._layout(gw, gh)
 
     def _shadow_text(self, x, y, text, font_spec, fill, anchor="nw"):
@@ -653,7 +664,7 @@ class WillowApplication:
         else:
             self.tip_label.grid_remove()
         footer_width = rects["footer"][2] - rects["footer"][0] - 2 * inset
-        self.status_label.configure(wraplength=max(200, footer_width - self.release_button.winfo_reqwidth() - P(8)))
+        self.status_label.configure(wraplength=max(200, footer_width - self.settings_button.winfo_reqwidth() - P(8)))
         self.audio_source_label.configure(wraplength=max(200, rects["footer"][2] - rects["footer"][0] - 2 * inset))
         # on short windows the raw model sentence makes room for the picture flow
         if H < P(720):
@@ -754,11 +765,11 @@ class WillowApplication:
         if photo is None:
             text = ""
         elif photo.get("user_record"):
-            text = "我的观鸟记录 · " + str(photo.get("display_name") or "未命名照片") + " · " + str(photo.get("species_cn") or "鸟种未确认")
+            text = tr("我的观鸟记录 · ") + str(photo.get("display_name") or tr("未命名照片")) + " · " + str(species_name(photo.get("species_cn")) or tr("鸟种未确认"))
         elif photo.get("user"):
-            text = "你自己的照片 · " + photo["path"].name
+            text = tr("你自己的照片 · ") + photo["path"].name
         else:
-            text = f"摄影 {photo.get('author')} · {photo.get('license')} · Wikimedia Commons"
+            text = tr("摄影 {0} · {1} · Wikimedia Commons").format(photo.get('author'), photo.get('license'))
         for item in self.credit_items:
             self.bg.itemconfigure(item, text=text)
 
@@ -771,7 +782,7 @@ class WillowApplication:
             call = "Listen to this bird" if photo.get("local_audio") else "No local recording"
         if call is None:
             return None
-        caption = f"我是{species}。" if self.hero_revealed else None
+        caption = tr("我是{0}。").format(species_name(species)) if self.hero_revealed else None
         return art.call_tag(call, caption, self._px(14),
                             playing=self._audio_is_playing and self._audio_common_name == species)
 
@@ -874,8 +885,8 @@ class WillowApplication:
         if not self._in_hero(event):
             return
         menu = tk.Menu(self.window, tearoff=False)
-        menu.add_command(label="我有自己的观鸟记录图！", command=lambda: self._open_library("records"))
-        menu.add_command(label="换下一张（每10秒自动轮播）", command=self._advance_hero)
+        menu.add_command(label=tr("我有自己的观鸟记录图！"), command=lambda: self._open_library("records"))
+        menu.add_command(label=tr("换下一张（每10秒自动轮播）"), command=self._advance_hero)
         try:
             menu.tk_popup(event.x_root, event.y_root)
         finally:
@@ -892,7 +903,7 @@ class WillowApplication:
                 self.photos, self._record_hero_saved)
         except Exception as exc:
             self.logger.exception("打开观鸟图片选择失败")
-            self.status.set(f"这份记录暂时不能用作观鸟图：{exc}")
+            self.status.set(tr("这份记录暂时不能用作观鸟图：{0}").format(exc))
 
     def _record_hero_saved(self, gallery_id):
         from .hero_picker import load_gallery
@@ -906,7 +917,7 @@ class WillowApplication:
         if self._bg_size:
             self._render_bg(*self._bg_size)
         self._reset_carousel()
-        self.status.set("轮播图已保存，名字和叫声关联所选鸟的本地资料；每10秒自动切换。")
+        self.status.set(tr("轮播图已保存，名字和叫声关联所选鸟的本地资料；每10秒自动切换。"))
 
     # ================================================================ details
     def _set_detail_lines(self, lines):
@@ -941,51 +952,103 @@ class WillowApplication:
     def open_results(self):
         self._open_library("records")
 
-    def _open_release_dialog(self):
-        if self._release_dialog is not None and self._release_dialog.winfo_exists():
-            self._release_dialog.deiconify()
-            self._release_dialog.lift()
+    def _open_settings_dialog(self):
+        if self.closing:
             return
-        dialog = self._release_dialog = tk.Toplevel(self.window)
-        dialog.title("版本与更新")
+        if self._settings_dialog is not None and self._settings_dialog.winfo_exists():
+            self._settings_dialog.deiconify()
+            self._settings_dialog.lift()
+            return
+        dialog = self._settings_dialog = tk.Toplevel(self.window)
+        dialog.title(tr("设置"))
         dialog.transient(self.window)
         dialog.resizable(False, False)
+        dialog.withdraw()
         dialog.bind("<Escape>", lambda event: dialog.destroy())
-        panel = tk.Frame(dialog, background=CARD, padx=self._px(22), pady=self._px(18))
+        P = self._px
+        panel = tk.Frame(dialog, background="#f4f2e8", padx=P(22), pady=P(22))
         panel.pack(fill="both", expand=True)
-        version = "v" + self.release_info.version if self.release_info else "未知"
-        ttk.Label(panel, text=f"当前版本  {version}", style="Head.TLabel").pack(anchor="w")
+        panel.columnconfigure(0, minsize=P(406))
+        card_options = {"background": CARD, "highlightthickness": 1, "highlightbackground": "#d9dfca",
+                        "padx": P(16), "pady": P(14)}
+        heading = (self.family, 11, "bold")
+        language_card = tk.Frame(panel, **card_options)
+        language_card.grid(row=0, column=0, sticky="ew", pady=(0, P(12)))
+        language_card.columnconfigure(0, weight=1)
+        tk.Label(language_card, text=tr("界面语言"), background=CARD, foreground=INK,
+                 font=heading, anchor="w").grid(row=0, column=0, sticky="w", padx=(0, P(12)))
+        self._language_combo = ttk.Combobox(language_card, values=tuple(LANGUAGE_OPTIONS),
+                                            width=12, state="readonly", font=self.f_body)
+        self._language_combo.set(next(label for label, code in LANGUAGE_OPTIONS.items() if code == self.language))
+        self._language_combo.grid(row=0, column=1, sticky="e", padx=(0, P(10)))
+        self._language_combo.bind("<<ComboboxSelected>>", self._refresh_language_controls)
+        self._language_apply = ttk.Button(language_card, text=tr("应用"), style=self.btn_style["Go"],
+                                          command=lambda: self.change_language(LANGUAGE_OPTIONS[self._language_combo.get()]))
+        self._language_apply.grid(row=0, column=2, sticky="e")
+        self._refresh_language_controls()
+
+        update_card = tk.Frame(panel, **card_options)
+        update_card.grid(row=1, column=0, sticky="ew")
+        update_card.columnconfigure(0, weight=1)
+        tk.Label(update_card, text=tr("版本与更新"), background=CARD, foreground=INK,
+                 font=heading, anchor="w").grid(row=0, column=0, sticky="w")
+        version = "v" + self.release_info.version if self.release_info else tr("未知")
+        ttk.Label(update_card, text=tr("当前版本  {0}").format(version), style="Soft.TLabel").grid(
+            row=1, column=0, sticky="w", pady=(P(4), 0))
+        self._release_retry = ttk.Button(update_card, text=tr("检查更新"), style=self.btn_style["Meme"],
+                                         command=self._start_release_check)
+        self._release_retry.grid(row=0, column=1, rowspan=2, sticky="e", padx=(P(12), 0))
+
+        self._release_status = tk.Frame(update_card, background=CARD)
+        self._release_status.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(P(12), 0))
+        tk.Frame(self._release_status, background="#e1e5d6", height=P(1)).pack(fill="x", pady=(0, P(9)))
         self._release_message = tk.StringVar(dialog)
-        ttk.Label(panel, textvariable=self._release_message, style="Card.TLabel",
-                  wraplength=self._px(310)).pack(anchor="w", pady=(self._px(10), self._px(12)))
-        actions = tk.Frame(panel, background=CARD)
-        actions.pack(fill="x")
-        self._release_retry = ttk.Button(actions, text="立即检查", command=self._start_release_check)
-        self._release_retry.pack(side="left")
-        self._release_page = ttk.Button(actions, text="打开发布页", command=self._open_release_page)
+        self._release_note = ttk.Label(self._release_status, textvariable=self._release_message,
+                                       style="Soft.TLabel", justify="left")
+        self._release_page = ttk.Button(self._release_status, text=tr("打开发布页"), style=self.btn_style["Meme"],
+                                        command=self._open_release_page)
+        self._release_note.pack(side="left", fill="x", expand=True)
         self._refresh_release_dialog()
+        dialog.update_idletasks()
+        x = self.window.winfo_rootx() + (self.window.winfo_width() - dialog.winfo_reqwidth()) // 2
+        y = self.window.winfo_rooty() + (self.window.winfo_height() - dialog.winfo_reqheight()) // 2
+        dialog.geometry(f"+{max(0, x)}+{max(0, y)}")
+        dialog.deiconify()
+        dialog.focus_set()
+
+    def _refresh_language_controls(self, event=None):
+        if self._settings_dialog is None or not self._settings_dialog.winfo_exists():
+            return
+        changed = LANGUAGE_OPTIONS[self._language_combo.get()] != self.language
+        self._language_apply.configure(state="normal" if changed and not self.busy else "disabled")
 
     def _refresh_release_dialog(self):
-        if self._release_dialog is None or not self._release_dialog.winfo_exists():
+        if self._settings_dialog is None or not self._settings_dialog.winfo_exists():
             return
         configured = bool(self.release_info and self.release_info.repository)
         if self._release_pending:
-            message = "正在查询 GitHub…"
+            message = tr("正在查询 GitHub…")
         elif self._release_result:
             message = self._release_result.message
         elif not self.release_info:
-            message = "无法读取本机的发布配置。"
+            message = tr("无法读取本机的发布配置。")
         elif not configured:
             name = self.release_info.repository_name
-            message = f"已登记 {name}，待配置 GitHub 所属账号。" if name else "尚未配置 GitHub 发布仓库。"
+            message = tr("已登记 {0}，待配置 GitHub 所属账号。").format(name) if name else tr("尚未配置 GitHub 发布仓库。")
         else:
-            message = "可查询 GitHub 上的最新正式版。"
+            message = ""
         self._release_message.set(message)
         self._release_retry.configure(state="normal" if configured and not self._release_pending else "disabled")
-        if self._release_result and self._release_result.page:
-            self._release_page.pack(side="left", padx=(self._px(8), 0))
+        has_page = bool(self._release_result and self._release_result.page)
+        self._release_note.configure(wraplength=self._px(230 if has_page else 350))
+        if has_page:
+            self._release_page.pack(side="right", padx=(self._px(8), 0))
         else:
             self._release_page.pack_forget()
+        if message or has_page:
+            self._release_status.grid()
+        else:
+            self._release_status.grid_remove()
 
     def _open_release_page(self):
         if self._release_result and self._release_result.page:
@@ -1036,7 +1099,7 @@ class WillowApplication:
             if result and result.get("status") != "error":
                 stored = library.ingest_result(result)
                 if stored.get("deleted"):
-                    self.status.set("这份记录已从档案删除；重新识别可生成一份新记录。")
+                    self.status.set(tr("这份记录已从档案删除；重新识别可生成一份新记录。"))
                     return
                 result = library.event_detail(stored["event_id"])
             old = self.library_window
@@ -1048,7 +1111,7 @@ class WillowApplication:
                 family=self.family)
         except Exception as exc:
             self.logger.exception("打开本地鸟种库失败")
-            self.status.set(f"本地档案暂时无法打开：{exc}")
+            self.status.set(tr("本地档案暂时无法打开：{0}").format(exc))
 
     def play_bird_audio(self, species):
         try:
@@ -1060,28 +1123,28 @@ class WillowApplication:
             available = [item for item in clips if item.get("path") and
                          (self.app_root / item["path"]).is_file()]
             if not available:
-                self.status.set(f"{(detail or {}).get('common_name') or species or '这只鸟'}暂未收录可离线播放的叫声，可在鸟种卡查看资料来源。")
+                self.status.set(tr("{0}暂未收录可离线播放的叫声，可在鸟种卡查看资料来源。").format(species_name((detail or {}).get("common_name") or species, (detail or {}).get("scientific_name")) or tr("这只鸟")))
                 return
             key = (detail or {}).get("scientific_name") or species
             if self._audio_species == key and self.audio.playing:
                 self.audio.stop()
-                self.status.set("鸟叫已停止。")
+                self.status.set(tr("鸟叫已停止。"))
             else:
                 clip = available[0]
                 self.audio.play(clip["path"])
                 self._audio_species = key
                 self._audio_common_name = (detail or {}).get("common_name")
-                author = clip.get("author") or "来源见鸟种卡"
+                author = clip.get("author") or tr("来源见鸟种卡")
                 from urllib.parse import urlsplit
-                host = urlsplit(clip.get("source_url") or "").hostname or "本地资料"
+                host = urlsplit(clip.get("source_url") or "").hostname or tr("本地资料")
                 platform = {"commons.wikimedia.org": "Wikimedia Commons", "www.inaturalist.org": "iNaturalist",
                             "inaturalist.org": "iNaturalist", "xeno-canto.org": "xeno-canto"}.get(host, host)
-                self.audio_source.set(f"声音来源：{platform}  ·  录音：{author}  ·  {clip.get('license') or '许可见鸟种卡'}  ·  点击查看来源")
-                self.status.set(f"正在播放 {(detail or {}).get('common_name') or species} · {clip.get('title') or '野外录音'} · {author}")
+                self.audio_source.set(tr("声音来源：{0}  ·  录音：{1}  ·  {2}  ·  点击查看来源").format(platform, author, clip.get('license') or tr('许可见鸟种卡')))
+                self.status.set(tr("正在播放 {0} · {1} · {2}").format(species_name((detail or {}).get("common_name"), key), clip.get('title') or tr('野外录音'), author))
             self._refresh_audio_bubble()
         except Exception as exc:
             self.logger.exception("播放叫声失败")
-            self.status.set(f"叫声暂时无法播放：{exc}")
+            self.status.set(tr("叫声暂时无法播放：{0}").format(exc))
 
     def _show_audio_source(self, event=None):
         if self._audio_species:
@@ -1092,8 +1155,8 @@ class WillowApplication:
     def _refresh_audio_bubble(self):
         previously_playing = self._audio_is_playing
         self._audio_is_playing = self.audio.playing
-        if previously_playing and not self._audio_is_playing and self.status.get().startswith("正在播放 "):
-            self.status.set("鸟叫播放完毕。")
+        if previously_playing and not self._audio_is_playing and self.status.get().startswith(tr("正在播放 ")):
+            self.status.set(tr("鸟叫播放完毕。"))
         self.bubble_img = self._call_bubble()
         if self._bg_size:
             self._render_bg(*self._bg_size)
@@ -1108,28 +1171,28 @@ class WillowApplication:
         self._audio_id = self.window.after(200, self._poll_audio)
 
     def choose_images(self):
-        paths = filedialog.askopenfilenames(parent=self.window, title="投喂疑似柳莺的照片",
-            filetypes=[("照片", "*.jpg *.jpeg *.png *.webp *.bmp *.tif *.tiff"), ("所有文件", "*.*")])
+        paths = filedialog.askopenfilenames(parent=self.window, title=tr("投喂疑似柳莺的照片"),
+            filetypes=[(tr("照片"), "*.jpg *.jpeg *.png *.webp *.bmp *.tif *.tiff"), (tr("所有文件"), "*.*")])
         self.add_paths(paths)
 
     def choose_package(self):
-        folder = filedialog.askdirectory(parent=self.window, title="选择完整NVIDIA模型包",
+        folder = filedialog.askdirectory(parent=self.window, title=tr("选择完整NVIDIA模型包"),
                                          initialdir=self.package.get() or str(self.app_root))
         if folder:
             self.package.set(folder)
             self.save_settings()
-            self.status.set("模型包位置记住了，下次鉴定就用它。")
+            self.status.set(tr("模型包位置记住了，下次鉴定就用它。"))
 
     def _set_photo_state(self, key, state):
-        self.photo_tree.set(key, "state", PHOTO_STATES[state])
+        self.photo_tree.set(key, "state", tr(PHOTO_STATES[state]))
         self.photo_tree.item(key, tags=(state,))
 
     def _update_count(self):
         if not self.jobs:
-            self.count_label.configure(text="空空如也")
+            self.count_label.configure(text=tr("空空如也"))
             return
         done = sum(1 for k in self.jobs if k in self.results)
-        self.count_label.configure(text=f"{done}/{len(self.jobs)} 只已审")
+        self.count_label.configure(text=tr("{0}/{1} 只已审").format(done, len(self.jobs)))
 
     def add_paths(self, paths):
         for source in paths:
@@ -1138,7 +1201,7 @@ class WillowApplication:
                 continue
             key = f"photo_{len(self.jobs)+1}"
             self.jobs[key] = str(path)
-            self.photo_tree.insert("", "end", iid=key, values=(path.name, PHOTO_STATES["pending"]), tags=("pending",))
+            self.photo_tree.insert("", "end", iid=key, values=(path.name, tr(PHOTO_STATES["pending"])), tags=("pending",))
         if self.jobs and not self.photo_tree.selection():
             self.photo_tree.selection_set(next(iter(self.jobs)))
             self.select_photo()
@@ -1164,16 +1227,33 @@ class WillowApplication:
         self.photo_message.set("")
         self._show_verdict(None)
         self._detail_lines = None
-        self.details.set("先在左边点一张照片，再在「逐只审问」里点一只鸟。")
-        self.status.set("全部放生了 (・ω・)ノ 可以投喂新照片继续。")
+        self.details.set(tr("先在左边点一张照片，再在「逐只审问」里点一只鸟。"))
+        self.status.set(tr("全部放生了 (・ω・)ノ 可以投喂新照片继续。"))
         self._update_count()
         self._refresh_preview()
 
-    def save_settings(self):
+    def save_settings(self, *, language=None):
         self.settings_path.parent.mkdir(parents=True, exist_ok=True)
-        value = {"package_root": self.package.get(), "device": DEVICE_MODES.get(self.device.get(), self.device.get()),
-                 "detection_mode": self.detection_mode.get()}
-        self.settings_path.write_bytes(json.dumps(value, ensure_ascii=False, indent=2).encode("utf-8"))
+        value = {**self.settings, "package_root": self.package.get(), "device": self.device_choices[self.device.get()],
+                 "detection_mode": self.detection_choices[self.detection_mode.get()], "language": language or self.language}
+        temporary = self.settings_path.with_suffix(".tmp")
+        temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        temporary.replace(self.settings_path)
+        self.settings = value
+
+    def change_language(self, language):
+        if self.busy or self.closing or language == self.language:
+            return
+        if self.library_window is not None and self.library_window.has_unsaved_edits:
+            messagebox.showinfo(tr("切换语言"), tr("切换前，请保存或放弃档案中的未保存改动。"), parent=self.window)
+            return
+        try:
+            self.save_settings(language=language)
+        except OSError as error:
+            messagebox.showerror(tr("无法保存语言设置"), str(error), parent=self.window)
+            return
+        self.restart_language = True
+        self.quit_application()
 
     def _set_busy(self, value):
         self.busy = value
@@ -1182,27 +1262,28 @@ class WillowApplication:
         for widget in (self.mode_box, self.device_box):
             widget.configure(state="disabled" if value else "readonly")
         self.cancel_button.configure(state="normal" if value else "disabled")
+        self._refresh_language_controls()
 
     def start_batch(self):
         if self.busy or self.closing:
             return
         if not self.jobs:
-            self.status.set("还没投喂照片呢 —— 先点「找到鸟了！」。")
+            self.status.set(tr("还没投喂照片呢 —— 先点「找到鸟了！」。"))
             return
         if not self.package.get().strip() or not Path(self.package.get()).is_dir():
-            self.status.set("找不到模型包 (°ー°〃) 先点「模型包在哪…」选一下完整的模型包位置。")
+            self.status.set(tr("找不到模型包 (°ー°〃) 先点「模型包在哪…」选一下完整的模型包位置。"))
             return
         self.save_settings()
         self._set_busy(True)
-        mode = DETECTION_MODES[self.detection_mode.get()]
-        device = DEVICE_MODES.get(self.device.get(), self.device.get())
+        mode = DETECTION_MODES[self.detection_choices[self.detection_mode.get()]]
+        device = self.device_choices[self.device.get()]
         package = self.package.get()
         self.active = set(self.jobs)
         self.batch_keys = list(self.jobs)
         self.last_progress = ""
         for key in self.jobs:
             self._set_photo_state(key, "queued")
-        self.status.set(f"{len(self.active)} 张照片排好队了，开始鉴定……")
+        self.status.set(tr("{0} 张照片排好队了，开始鉴定……").format(len(self.active)))
         self._refresh_selected_headline()
         # paint the queued state now, before the worker starts competing for the CPU
         self.window.update_idletasks()
@@ -1223,7 +1304,7 @@ class WillowApplication:
             self.active.discard(key)
             self._set_photo_state(key, "cancelled")
             count += 1
-        self.status.set(f"行，{count} 张排队的照片不认了；正在认的那张会认完。")
+        self.status.set(tr("行，{0} 张排队的照片不认了；正在认的那张会认完。").format(count))
         if not self.active:
             self._set_busy(False)
         self._refresh_selected_headline()
@@ -1231,8 +1312,8 @@ class WillowApplication:
     def _batch_summary(self):
         kinds = [result_kind(self.results.get(k)) for k in self.batch_keys if k in self.results]
         parts = []
-        for kind, label in (("willow", "柳莺"), ("not_willow", "非柳莺"), ("uncertain", "薛定谔"),
-                            ("no_bird", "没找到鸟"), ("error", "翻车")):
+        for kind, label in (("willow", tr("柳莺")), ("not_willow", tr("非柳莺")), ("uncertain", tr("薛定谔")),
+                            ("no_bird", tr("没找到鸟")), ("error", tr("翻车"))):
             n = kinds.count(kind)
             if n:
                 parts.append(f"{label} ×{n}")
@@ -1249,7 +1330,7 @@ class WillowApplication:
                     self._set_photo_state(event[1], "running")
                     self._refresh_selected_headline()
                 elif kind == "progress":
-                    self.last_progress = event[2]
+                    self.last_progress = progress_message(event[2])
                     self._compose_busy_status()
                 elif kind == "log":
                     self.logger.warning(event[1])
@@ -1257,8 +1338,9 @@ class WillowApplication:
                     self._release_pending = False
                     self._release_result = event[1]
                     if not self.closing:
-                        label = "有更新" if self._release_result.update_available else "更新"
-                        self.release_button.configure(text=f"v{self.release_info.version} · {label}")
+                        self.settings_button.configure(
+                            text=tr("设置 · 有更新") if self._release_result.update_available else tr("设置"))
+                        self._layout(self.window.winfo_width(), self.window.winfo_height())
                         self._refresh_release_dialog()
                 elif kind in ("done", "failed"):
                     key = event[1]
@@ -1285,8 +1367,8 @@ class WillowApplication:
                     if not self.active:
                         self._set_busy(False)
                         summary = self._batch_summary()
-                        self.status.set("本批鉴定完毕！" + (f"（{summary}）" if summary else "") +
-                                        " 点击「翻翻档案」查看本地记录。")
+                        self.status.set(tr("本批鉴定完毕！") + (f"（{summary}）" if summary else "") +
+                                        tr(" 点击「翻翻档案」查看本地记录。"))
         except queue.Empty:
             pass
         if self.closing and not self.worker.is_alive():
@@ -1317,12 +1399,12 @@ class WillowApplication:
         if not self.busy or self.closing:
             return
         face = SPINNER[self._tick % len(SPINNER)]
-        text = f"{face}  {self._loading_line}"
+        text = f"{face}  {tr(self._loading_line)}"
         if self.last_progress:
             text += f"   ｜ {self.last_progress}"
         left = len(self.active)
         if left:
-            text += f"   ｜ 还剩 {left} 张"
+            text += tr("   ｜ 还剩 {0} 张").format(left)
         self.status.set(text)
 
     def _animate(self):
@@ -1332,7 +1414,7 @@ class WillowApplication:
         self._tick += 1
         if self._tick % 18 == 0:
             self._tip_index = (self._tip_index + 1) % len(TOOL_TIPS)
-            self.tip_label.configure(text=TOOL_TIPS[self._tip_index])
+            self.tip_label.configure(text=tr(TOOL_TIPS[self._tip_index]))
         if self.busy and not self.closing:
             if self._tick % 5 == 0:
                 self._loading_line = random.choice([l for l in LOADING_LINES if l != self._loading_line])
@@ -1340,7 +1422,7 @@ class WillowApplication:
             key = self.running_key
             if key and key in self.jobs and key in self.active:
                 try:
-                    self.photo_tree.set(key, "state", PHOTO_STATES["running"] + "." * (1 + self._tick % 3))
+                    self.photo_tree.set(key, "state", tr(PHOTO_STATES["running"]) + "." * (1 + self._tick % 3))
                 except tk.TclError:
                     pass
         self._anim_id = self.window.after(450, self._animate)
@@ -1351,33 +1433,33 @@ class WillowApplication:
         kind = result_kind(result)
         color = KIND_COLORS.get(kind, KIND_COLORS["pending"])[0]
         if key is None:
-            text, prefix = "还没有嫌疑鸟 —— 先投喂几张照片吧", ""
+            text, prefix = tr("还没有嫌疑鸟 —— 先投喂几张照片吧"), ""
         elif result is None:
             name = Path(self.jobs[key]).name
             if key == self.running_key:
-                text = "正在盯着看……这到底是哪种柳莺"
+                text = tr("正在盯着看……这到底是哪种柳莺")
             elif key in self.active:
-                text = "排队中，前面还有别的柳莺在接受审问"
+                text = tr("排队中，前面还有别的柳莺在接受审问")
             else:
-                text = "待鉴定：点「开始鉴定！」认一认"
-            prefix = "文件："
+                text = tr("待鉴定：点「开始鉴定！」认一认")
+            prefix = tr("文件：")
         else:
-            prefix = "鉴定结果："
+            prefix = tr("鉴定结果：")
             if kind == "willow":
                 names = _specialist_names(result)
                 outgroups = _specialist_outgroups(result)
-                text = ("是柳莺！专项小声说可能是：" + "、".join(names)) if names else (
-                    "柳莺候选，但专项更像：" + "、".join(outgroups) + "。请看逐鸟结果。" if outgroups else "是柳莺！至于哪种……某种柳莺。")
+                text = (tr("是柳莺！专项小声说可能是：") + "、".join(names)) if names else (
+                    tr("柳莺候选，但专项更像：") + "、".join(outgroups) + tr("。请看逐鸟结果。") if outgroups else tr("是柳莺！至于哪种……某种柳莺。"))
             elif kind == "not_willow":
-                names = list(dict.fromkeys(str(b.get("original_name")) for b in result.get("boxes", [])
+                names = list(dict.fromkeys(species_name(b.get("original_name"), b.get("original_scientific_name")) for b in result.get("boxes", [])
                                            if b.get("original_name")))
-                text = "根本没有这种柳莺" + (f" —— 这是{'、'.join(names)}" if names else "")
+                text = tr("根本没有这种柳莺") + (tr(" —— 这是{0}").format('、'.join(names)) if names else "")
             elif kind == "uncertain":
-                text = "薛定谔的柳莺：证据不够，没下结论"
+                text = tr("薛定谔的柳莺：证据不够，没下结论")
             elif kind == "no_bird":
-                text = "鸟呢？这张图里一只鸟都没逮到"
+                text = tr("鸟呢？这张图里一只鸟都没逮到")
             else:
-                text = "翻车了！这张没认成"
+                text = tr("翻车了！这张没认成")
         self.verdict.set(text)
         self.verdict_label.configure(foreground=color)
         self.message_prefix.configure(text=prefix)
@@ -1397,27 +1479,27 @@ class WillowApplication:
         for iid in self.bird_tree.get_children():
             self.bird_tree.delete(iid)
         self._detail_lines = None
-        self.details.set("点「逐只审问」里的一只鸟，看看它的鉴定卡。")
+        self.details.set(tr("点「逐只审问」里的一只鸟，看看它的鉴定卡。"))
         self.crop.delete("all")
         self.crop_photo = None
         self._show_verdict(key)
         if self.current_result is not None:
-            self.photo_message.set(str(self.current_result.get("message", "")))
+            self.photo_message.set(result_message(str(self.current_result.get("message", ""))))
             for i, box in enumerate(self.current_result.get("boxes", [])):
                 status = box.get("gate_status")
                 tag = "outside" if status == "willow_outside_coverage" else (
                     "willow" if status == "willow" else "not_willow" if status == "not_willow" else "uncertain")
                 bird_id = str(box.get("bird_id", str(i + 1)))
                 number = bird_id.split("_")[-1].lstrip("0") or bird_id
-                self.bird_tree.insert("", "end", iid=str(i), values=(f"{number} 号", bird_label(box)), tags=(tag,))
+                self.bird_tree.insert("", "end", iid=str(i), values=(tr("{0} 号").format(number), bird_label(box)), tags=(tag,))
             if self.bird_tree.get_children():
                 self.bird_tree.selection_set("0")
                 self.select_bird()          # also redraws the preview flow for that bird
                 return
-            self._draw_crop_placeholder("这张没有鸟\n可以审问")
+            self._draw_crop_placeholder(tr("这张没有鸟\n可以审问"))
         else:
             self.photo_message.set(Path(self.jobs[key]).name)
-            self._draw_crop_placeholder("还没鉴定")
+            self._draw_crop_placeholder(tr("还没鉴定"))
         self._refresh_preview()
 
     def _draw_crop_placeholder(self, text):
@@ -1483,19 +1565,19 @@ class WillowApplication:
             except Exception as exc:
                 self.logger.warning("占位图失败：%s", exc)
         canvas.create_text(w / 2, text_y, fill=INK_SOFT, font=(self.family, 11), justify="center",
-                           text="这只冕柳莺等你投喂等得都坐地上了 —— 点「找到鸟了！」丢几只疑似柳莺进来")
+                           text=tr("这只冕柳莺等你投喂等得都坐地上了 —— 点「找到鸟了！」丢几只疑似柳莺进来"))
 
     def _stamp_image(self, result):
         kind = result_kind(result)
         if kind not in STAMPS:
             return None
-        text, sub = STAMPS[kind]
+        text, sub = map(tr, STAMPS[kind])
         if kind == "willow":
             names = _specialist_names(result)
             if names:
-                sub = "专项猜：" + names[0] + "（仅供参考）"
+                sub = tr("专项猜：") + names[0] + tr("（仅供参考）")
             elif _specialist_outgroups(result):
-                text, sub = "有点像，但存疑", "专项倾向相似组外鸟 · 请看详情"
+                text, sub = tr("有点像，但存疑"), tr("专项倾向相似组外鸟 · 请看详情")
         color = art.STAMP_RED if kind in ("willow", "not_willow", "error") else KIND_COLORS[kind][1]
         size = max(16, min(self._px(30), self.preview.winfo_height() // 7))
         return art.stamp(text, sub, color=tuple(color), size=size, angle=-11)
@@ -1545,12 +1627,12 @@ class WillowApplication:
         if (box.get("gate_status") == "willow" and expert and is_willow
                 and expert.get("global_id", -1) != -1 and expert.get("common_name")):
             final = {"cn": expert["common_name"], "sci": expert.get("scientific_name"),
-                     "conf": expert.get("confidence"), "source": expert.get("display_source", "专项复核")}
+                     "conf": expert.get("confidence"), "source": expert.get("display_source", tr("专项复核"))}
         elif box.get("original_name"):
             final = {"cn": box["original_name"], "sci": box.get("original_scientific_name"),
-                     "conf": box.get("original_confidence"), "source": "原判保留（专项未确认）"}
+                     "conf": box.get("original_confidence"), "source": tr("原判保留（专项未确认）")}
         else:
-            final = {**cands[0], "source": "原判保留（专项未确认）"}
+            final = {**cands[0], "source": tr("原判保留（专项未确认）")}
         fe = str(final.get("sci") or "").split()[-1:] or [""]
         hint = next((c for c in cands if str(c["sci"]).split()[-1:] != fe), None)
         return {"cands": cands, "final": final, "hint": hint}
@@ -1584,7 +1666,7 @@ class WillowApplication:
             return image, plate
         image = art.Image.new("RGB", (max(20, box_w), max(20, int(box_w * .62))), (240, 242, 230))
         d = art.ImageDraw.Draw(image)
-        d.text((8, 8), f"{cand.get('cn')}\n（暂无可用参考图）", font=art.font(self._px(11)), fill=art.INK_SOFT)
+        d.text((8, 8), tr("{0}\n（暂无可用参考图）").format(species_name(cand.get('cn'), cand.get('sci'))), font=art.font(self._px(11)), fill=art.INK_SOFT)
         image.thumbnail((max(20, box_w), max(20, box_h)))
         return image, None
 
@@ -1616,7 +1698,7 @@ class WillowApplication:
             return False
         shown = photo_img.copy()
         shown.thumbnail((w_photo - frame, bottom - top - P(12)), Image.LANCZOS)
-        self.preview_photo, rect = self._framed(canvas, shown, x + w_photo / 2, cy, "f_photo", src, "原图")
+        self.preview_photo, rect = self._framed(canvas, shown, x + w_photo / 2, cy, "f_photo", src, tr("原图"))
         x += w_photo + gap
         # 2) arrow → cropped bird
         canvas.create_line(x, cy, x + arrow_w, cy, arrow="last", width=P(2), fill=OLIVE,
@@ -1630,8 +1712,8 @@ class WillowApplication:
             shown = crop_img.copy()
             shown.thumbnail((w_crop - frame, int((bottom - top) * .62)), Image.LANCZOS)
             _, crop_rect = self._framed(canvas, shown, x + w_crop / 2, cy, "f_crop", crop_src,
-                                        f"{box.get('bird_id', '')} 裁切图")
-        canvas.create_text(x + w_crop / 2, (crop_rect[3] if crop_rect else cy) + P(12), text="对焦中...",
+                                        tr("{0} 裁切图").format(box.get('bird_id', '')))
+        canvas.create_text(x + w_crop / 2, (crop_rect[3] if crop_rect else cy) + P(12), text=tr("对焦中..."),
                            fill=INK_SOFT, font=(self.family, 8))
         x += w_crop + gap
         # 3) { top-2 candidates with confidence }
@@ -1645,9 +1727,9 @@ class WillowApplication:
             sy = slots[i] if len(data["cands"]) > 1 else cy - label_h / 2
             zoom_src = plate["path"] if plate else None
             _, r = self._framed(canvas, image, x + w_cand / 2, sy, f"f_cand{i}", zoom_src,
-                                f"候选 {i + 1}：{cand['cn']}（{self._pct(cand['conf'])}）")
+                                tr("候选 {0}：{1}（{2}）").format(i + 1, species_name(cand['cn'], cand.get('sci')), self._pct(cand['conf'])))
             canvas.create_text(x + w_cand / 2, r[3] + P(9), fill=INK, font=(self.family, 9, "bold"),
-                               text=f"{cand['cn']}  {self._pct(cand['conf'])}")
+                               text=f"{species_name(cand['cn'], cand.get('sci'))}  {self._pct(cand['conf'])}")
         x += w_cand + gap
         self._brace(canvas, x, y_brace_top, y_brace_bot, brace_w, opening="left")
         x += brace_w + gap
@@ -1668,18 +1750,18 @@ class WillowApplication:
             image = image.convert("RGB")
         fy = top + final_h / 2 + P(2)
         _, r = self._framed(canvas, image, x + w_final / 2, fy, "f_final", plate["path"] if plate else None,
-                            f"最终答案：{final['cn']}")
+                            tr("最终答案：{0}").format(species_name(final['cn'], final.get('sci'))))
         conf = self._pct(final.get("conf"))
         canvas.create_text(x + w_final / 2, r[3] + P(10), fill="#3d7a1f", font=(self.family, 11, "bold"),
-                           text=final["cn"])
+                           text=species_name(final["cn"], final.get("sci")))
         canvas.create_text(x + w_final / 2, r[3] + P(25), fill=INK_SOFT, font=(self.family, 8),
-                           text=f"{final['source']} {conf}".strip())
+                           text=f"{tr(final['source'])} {conf}".strip())
         if hint is not None:
             link = canvas.create_text(x + w_final / 2, r[3] + P(41), fill=INK_SOFT, font=(self.family, 9, "underline"),
-                                      text=f"好像是{hint['cn']}？", tags=("f_hint",))
+                                      text=tr("好像是{0}？").format(species_name(hint['cn'], hint.get('sci'))), tags=("f_hint",))
             hint_plate = art.find_plate(hint.get("sci"), hint.get("cn"))
             canvas.tag_bind("f_hint", "<Button-1>", lambda e: self._zoom(
-                hint_plate["path"] if hint_plate else None, f"会不会是{hint['cn']}？（{self._pct(hint['conf'])}）"))
+                hint_plate["path"] if hint_plate else None, tr("会不会是{0}？（{1}）").format(species_name(hint['cn'], hint.get('sci')), self._pct(hint['conf']))))
             canvas.tag_bind("f_hint", "<Enter>", lambda e: (canvas.configure(cursor="hand2"),
                                                             canvas.itemconfigure(link, fill=OLIVE)))
             canvas.tag_bind("f_hint", "<Leave>", lambda e: (canvas.configure(cursor=""),
@@ -1710,7 +1792,7 @@ class WillowApplication:
             self.logger.warning("放大失败 %s：%s", source, exc)
             return
         top = tk.Toplevel(self.window)
-        top.title(title or "放大看看")
+        top.title(title or tr("放大看看"))
         top.configure(background="#1b2210")
         top.transient(self.window)
         sw, sh = self.window.winfo_screenwidth(), self.window.winfo_screenheight()
@@ -1722,7 +1804,7 @@ class WillowApplication:
         label = tk.Label(top, image=photo, background="#1b2210", cursor="hand2")
         label.image = photo
         label.pack(padx=12, pady=(12, 4))
-        tk.Label(top, text=(title + "    " if title else "") + "点图片或按 Esc 关闭", background="#1b2210",
+        tk.Label(top, text=(title + "    " if title else "") + tr("点图片或按 Esc 关闭"), background="#1b2210",
                  foreground="#d8e4bc", font=(self.family, 10)).pack(pady=(0, 10))
         top.update_idletasks()
         x = self.window.winfo_rootx() + (self.window.winfo_width() - top.winfo_reqwidth()) // 2
@@ -1742,51 +1824,51 @@ class WillowApplication:
         status = box.get("gate_status")
         bird_id = str(box.get("bird_id", ""))
         number = bird_id.split("_")[-1].lstrip("0") or bird_id
-        lines = [(f"{number} 号嫌疑鸟", "h")]
-        verdicts = {"willow": ("判定：是柳莺 ✔", "k_willow"),
-                    "willow_outside_coverage": ("判定：是柳莺，但超纲了", "k_willow"),
-                    "not_willow": ("判定：不是柳莺 ✘", "k_not_willow")}
-        verdict = verdicts.get(status, ("判定：薛定谔的柳莺 ？", "k_uncertain"))
+        lines = [(tr("{0} 号嫌疑鸟").format(number), "h")]
+        verdicts = {"willow": (tr("判定：是柳莺 ✔"), "k_willow"),
+                    "willow_outside_coverage": (tr("判定：是柳莺，但超纲了"), "k_willow"),
+                    "not_willow": (tr("判定：不是柳莺 ✘"), "k_not_willow")}
+        verdict = verdicts.get(status, (tr("判定：薛定谔的柳莺 ？"), "k_uncertain"))
         lines.append(verdict)
-        lines.append((str(box.get("gate_message", "无法确认")), "key"))
+        lines.append((result_message(str(box.get("gate_message", "无法确认"))), "key"))
         outside = status == "willow_outside_coverage"
         if outside:
             coverage = (box.get("specialist_coverage") or {}).get("willow_species", 6)
-            coverage_text = "六" if coverage == 6 else str(coverage)
-            lines.append((f"柳莺（覆盖外）：不在{coverage_text}种专项的已知覆盖范围。", "key"))
-            lines.append(("原判保留，不强行指定专项鸟种。", "note"))
+            coverage_text = tr("六") if coverage == 6 else str(coverage)
+            lines.append((tr("柳莺（覆盖外）：不在{0}种专项的已知覆盖范围。").format(coverage_text), "key"))
+            lines.append((tr("原判保留，不强行指定专项鸟种。"), "note"))
         specialist = box.get("specialist")
         if isinstance(specialist, dict):
             expanded = specialist.get("version") == "willow50-global-specialist-v1"
             if expanded:
-                prefix = "专项倾向相似组外鸟：" if specialist.get("decision_kind") == "similar_non_willow" else "50种专项："
+                prefix = tr("专项倾向相似组外鸟：") if specialist.get("decision_kind") == "similar_non_willow" else tr("50种专项：")
                 if (specialist.get("species_fusion") or {}).get("applied"):
-                    prefix = "融合倾向相似组外鸟：" if specialist.get("decision_kind") == "similar_non_willow" else "融合复核："
-                lines.append((prefix + str(specialist.get("common_name") or specialist.get("scientific_name") or "无法确认"), "verdict"))
+                    prefix = tr("融合倾向相似组外鸟：") if specialist.get("decision_kind") == "similar_non_willow" else tr("融合复核：")
+                lines.append((prefix + (species_name(specialist.get("common_name"), specialist.get("scientific_name")) or tr("无法确认")), "verdict"))
                 lines.append((str(specialist.get("scientific_name") or ""), "note"))
-                score_scope = specialist.get("confidence_scope", "58个训练鸟种之间的分数，不是正确率")
-                lines.append((f"模型分数：{specialist['confidence']:.3f}（{score_scope}）", "note"))
+                score_scope = tr(specialist.get("confidence_scope", "58个训练鸟种之间的分数，不是正确率"))
+                lines.append((tr("模型分数：{0}（{1}）").format(f"{specialist['confidence']:.3f}", score_scope), "note"))
                 for rank, candidate in enumerate(specialist.get("top3", []), 1):
-                    lines.append((f"候选{rank}：{candidate['common_name']}  {candidate['confidence']:.3f}", "key"))
-                lines.append(("原网络种名与检测框保留，专项结果单独展示。", "note"))
+                    lines.append((tr("候选{0}：{1}  {2}").format(rank, species_name(candidate['common_name'], candidate.get('scientific_name')), f"{candidate['confidence']:.3f}"), "key"))
+                lines.append((tr("原网络种名与检测框保留，专项结果单独展示。"), "note"))
             elif specialist.get("rejected_as_OTHER") or specialist.get("global_id") == -1:
-                lines.append(("专项：组外或无法确认（OTHER）", "key"))
-                lines.append(("翻译：不在专项那六种里，或者照片证据不够 —— OTHER 不等于不是柳莺", "note"))
+                lines.append((tr("专项：组外或无法确认（OTHER）"), "key"))
+                lines.append((tr("翻译：不在专项那六种里，或者照片证据不够 —— OTHER 不等于不是柳莺"), "note"))
             else:
-                prefix = "专项候选（仅诊断，未确认）：" if outside else "专项："
-                lines.append((prefix + str(specialist.get("common_name") or specialist.get("scientific_name") or "无法确认"),
+                prefix = tr("专项候选（仅诊断，未确认）：") if outside else tr("专项：")
+                lines.append((prefix + (species_name(specialist.get("common_name"), specialist.get("scientific_name")) or tr("无法确认")),
                               "verdict"))
                 if specialist.get("scientific_name"):
                     lines.append((str(specialist["scientific_name"]), "note"))
                 if specialist.get("confidence") is not None:
-                    lines.append((f"专项组内分数：{specialist['confidence']:.3f}（六种之间的相对把握，不是正确率）", "note"))
+                    lines.append((tr("专项组内分数：{0}（六种之间的相对把握，不是正确率）").format(f"{specialist['confidence']:.3f}"), "note"))
             if specialist.get("target_probability_mass") is not None:
-                scope = "50种柳莺" if expanded else "六种目标"
-                lines.append((f"{scope}总分：{specialist['target_probability_mass']:.3f}", "note"))
+                scope = tr("50种柳莺") if expanded else tr("六种目标")
+                lines.append((tr("{0}总分：{1}").format(scope, f"{specialist['target_probability_mass']:.3f}"), "note"))
         tip = TIPS.get("willow" if status in ("willow", "willow_outside_coverage") else
                        "not_willow" if status == "not_willow" else "uncertain")
-        lines.append((tip, "tip"))
-        lines.append((f"档案编号：{bird_id}", "note"))
+        lines.append((tr(tip), "tip"))
+        lines.append((tr("档案编号：{0}").format(bird_id), "note"))
         self._set_detail_lines(lines)
         self.crop.update_idletasks()
         self._show_image(self.crop, box.get("crop_path"), True)
@@ -1813,13 +1895,13 @@ class WillowApplication:
                 self.tray = Tray(self)
             if not self.tray.show():
                 if self.exit_dialog:
-                    self.exit_dialog.set_message('正在给小鸟留一个托盘位置…')
+                    self.exit_dialog.set_message(tr('正在给小鸟留一个托盘位置…'))
                 return
         except Exception as exc:
             self._background_pending = False
             self.logger.exception('后台托盘启动失败')
             if self.exit_dialog:
-                self.exit_dialog.set_message('暂时无法进入后台，请最小化窗口。' + str(exc))
+                self.exit_dialog.set_message(tr('暂时无法进入后台，请最小化窗口。') + str(exc))
             return
         self._background_pending = False
         if self.exit_dialog is not None:
@@ -1876,7 +1958,7 @@ class WillowApplication:
                         self._background_pending = False
                         self.restore_window()
                         if self.exit_dialog:
-                            self.exit_dialog.set_message('托盘启动失败，请先最小化窗口：' + str(self.tray.failed))
+                            self.exit_dialog.set_message(tr('托盘启动失败，请先最小化窗口：') + str(self.tray.failed))
             except queue.Empty:pass
         if self._background_pending and not self.closing:
             self.push_to_background()
@@ -1895,10 +1977,25 @@ class WillowApplication:
         self.cancel_pending()
         self._set_busy(True)
         self.worker.commands.put(None)
-        self.status.set("正在收摊……等手上这只认完就关门。")
+        self.status.set(tr("正在收摊……等手上这只认完就关门。"))
 
 
 def main(app_root, package_root, images=(), config=None, instance=None):
-    window = tk.Tk()
-    WillowApplication(window, app_root, package_root, initial_images=images, config=config, instance=instance)
-    window.mainloop()
+    previous_results = {}
+    while True:
+        window = tk.Tk()
+        app = WillowApplication(window, app_root, package_root, initial_images=images, config=config, instance=instance)
+        for key, source in app.jobs.items():
+            if source in previous_results:
+                result = previous_results[source]
+                app.results[key] = result
+                app._set_photo_state(key, "failed" if result.get("status") == "error" else "done")
+        if previous_results:
+            app._update_count()
+            app.select_photo()
+        window.mainloop()
+        if not app.restart_language:
+            return
+        images = tuple(app.jobs.values())
+        previous_results = {app.jobs[key]: result for key, result in app.results.items()}
+        config = {**app.config, "_resolved_package_root": app.settings["package_root"]}

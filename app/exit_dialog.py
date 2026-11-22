@@ -1,4 +1,5 @@
 """A modal card in the original window, so the same animated bird can land on it."""
+from .i18n import tr
 import tkinter as tk
 import math
 import time
@@ -13,12 +14,12 @@ class ExitDialog:
         fam=app.family;pad=app._px(22)
         self.top=tk.Canvas(self.panel,height=app._px(94),bg='#fffdf2',highlightthickness=0)
         self.top.pack(fill='x',padx=app._px(16),pady=(app._px(12),0))
-        tk.Label(self.panel,text='这就要出门找鸟啦？',font=(fam,17,'bold'),fg='#45682c',bg='#fffdf2').pack(pady=(0,app._px(14)))
-        self.exit_button=self._option('彻底退出','释放缓存，下次要重新翻《中国野生鸟类手册》',app.quit_application,False)
-        self.background_button=self._option('推到后台（要去找鸟）','占用缓存，下次打开找得更快。',app.push_to_background,True)
-        self.note=tk.Label(self.panel,text='后台会保留内存和显存；点托盘小鸟或再点 EXE 就回来。',font=(fam,9),fg='#78816c',bg='#fffdf2',wraplength=app._px(570))
+        tk.Label(self.panel,text=tr('这就要出门找鸟啦？'),font=(fam,17,'bold'),fg='#45682c',bg='#fffdf2').pack(pady=(0,app._px(14)))
+        self.exit_button=self._option(tr('彻底退出'),tr('释放缓存，下次要重新翻《中国野生鸟类手册》'),app.quit_application,False)
+        self.background_button=self._option(tr('推到后台（要去找鸟）'),tr('占用缓存，下次打开找得更快。'),app.push_to_background,True)
+        self.note=tk.Label(self.panel,text=tr('后台会保留内存和显存；点托盘小鸟或再点 EXE 就回来。'),font=(fam,9),fg='#78816c',bg='#fffdf2',wraplength=app._px(570))
         self.note.pack(padx=pad,pady=(app._px(8),app._px(4)))
-        self.cancel_button=tk.Button(self.panel,text='再看一会儿  ·  Esc',command=self.cancel,font=(fam,10),fg='#687550',bg='#fffdf2',activebackground='#eef2df',relief='flat',bd=0,cursor='hand2')
+        self.cancel_button=tk.Button(self.panel,text=tr('再看一会儿  ·  Esc'),command=self.cancel,font=(fam,10),fg='#687550',bg='#fffdf2',activebackground='#eef2df',relief='flat',bd=0,cursor='hand2')
         self.cancel_button.pack(pady=(0,app._px(12)))
         self.panel.update_idletasks();self.panel.grab_set();self.background_button.focus_set()
         self.escape_binding=self.root.bind('<Escape>',lambda e:(self.cancel(),'break')[1],add='+')

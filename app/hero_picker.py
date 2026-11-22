@@ -1,4 +1,5 @@
 """Local record crops and reversible slideshow slots, independent of inference."""
+from .i18n import tr
 import json
 from pathlib import Path
 import uuid
@@ -78,7 +79,7 @@ def save_crop(root, event, box, image, crop, replace_id=None):
     x1, x2 = sorted((max(0, min(image.width, round(x1))), max(0, min(image.width, round(x2)))))
     y1, y2 = sorted((max(0, min(image.height, round(y1))), max(0, min(image.height, round(y2)))))
     if x2 - x1 < 16 or y2 - y1 < 16:
-        raise ValueError("裁切范围太小，请重新框选。")
+        raise ValueError(tr("裁切范围太小，请重新框选。"))
     selected = box.get("xyxy")
     if isinstance(selected, (list, tuple)) and len(selected) == 4:
         bx1, by1, bx2, by2 = map(float, selected)
@@ -86,10 +87,10 @@ def save_crop(root, event, box, image, crop, replace_id=None):
             centre = (bx1+bx2)/2, (by1+by2)/2
             overlap = max(0, min(x2, bx2)-max(x1, bx1)) * max(0, min(y2, by2)-max(y1, by1))
             if not (x1 <= centre[0] <= x2 and y1 <= centre[1] <= y2) or overlap < (bx2-bx1)*(by2-by1)*.25:
-                raise ValueError("裁切需要包含所选鸟框的中心和主体；若要用旁边的鸟，请先切换鸟只。")
+                raise ValueError(tr("裁切需要包含所选鸟框的中心和主体；若要用旁边的鸟，请先切换鸟只。"))
     document = _read(root)
     if replace_id and not (replace_id.startswith("builtin:") or any(x["gallery_id"] == replace_id for x in document.get("additions", []))):
-        raise ValueError("先在右侧选择要替换的轮播图片。")
+        raise ValueError(tr("先在右侧选择要替换的轮播图片。"))
     unique = uuid.uuid4().hex
     folder = root / "assets/user_heroes"
     folder.mkdir(exist_ok=True)
@@ -115,7 +116,7 @@ def save_crop(root, event, box, image, crop, replace_id=None):
 
 def restore_builtin(root, gallery_id):
     if not gallery_id.startswith("builtin:"):
-        raise ValueError("请先选一张内置轮播图。")
+        raise ValueError(tr("请先选一张内置轮播图。"))
     doc = _read(root)
     doc.setdefault("overrides", {}).pop(gallery_id, None)
     _write(root, doc)
@@ -126,7 +127,7 @@ class HeroCropPicker(tk.Toplevel):
         super().__init__(parent)
         self.app_root, self.library, self.event = Path(app_root), library, event
         self.gallery, self.on_saved = list(gallery), on_saved
-        self.title("我有自己的观鸟记录图！")
+        self.title(tr("我有自己的观鸟记录图！"))
         self.configure(background=PAPER)
         self.geometry(f"{min(1060, self.winfo_screenwidth()-80)}x{min(740, self.winfo_screenheight()-100)}")
         self.minsize(780, 540)
@@ -135,12 +136,12 @@ class HeroCropPicker(tk.Toplevel):
         self.boxes = event.get("boxes") or []
         if not self.boxes:
             self.destroy()
-            raise ValueError("这张照片没有可选鸟框。")
+            raise ValueError(tr("这张照片没有可选鸟框。"))
         source = next((library.resolve_path(event.get(key)) for key in ("snapshot_path", "source")
                        if event.get(key) and library.resolve_path(event.get(key)) and library.resolve_path(event.get(key)).is_file()), None)
         if source is None:
             self.destroy()
-            raise ValueError("原图快照已移走，请选择另一份有本地原图的记录。")
+            raise ValueError(tr("原图快照已移走，请选择另一份有本地原图的记录。"))
         with Image.open(source) as original:
             self.image = ImageOps.exif_transpose(original).convert("RGB")
         self.crop = [0, 0, self.image.width, self.image.height]
@@ -151,10 +152,10 @@ class HeroCropPicker(tk.Toplevel):
         self.rowconfigure(1, weight=1)
         header = tk.Frame(self, background=PAPER)
         header.grid(row=0, column=0, columnspan=2, sticky="ew", padx=16, pady=12)
-        tk.Label(header, text="选择鸟 → 框选原图 → 新增或替换轮播图", background=PAPER, foreground=GREEN,
+        tk.Label(header, text=tr("选择鸟 → 框选原图 → 新增或替换轮播图"), background=PAPER, foreground=GREEN,
                  font=(self.family, 15, "bold")).pack(anchor="w")
         self.bird_choice = ttk.Combobox(header, state="readonly", width=54,
-            values=[f"第{i+1}只 · {b.get('common_name') or '鸟种未确认'} · {b.get('scientific_name') or '不关联叫声'}" for i, b in enumerate(self.boxes)])
+            values=[tr("第{0}只 · {1} · {2}").format(i + 1, b.get('common_name') or tr('鸟种未确认'), b.get('scientific_name') or tr('不关联叫声')) for i, b in enumerate(self.boxes)])
         self.bird_choice.pack(side="left", pady=(8, 0))
         self.bird_choice.current(0)
         self.bird_choice.bind("<<ComboboxSelected>>", lambda event: self.reset_crop())
@@ -165,7 +166,7 @@ class HeroCropPicker(tk.Toplevel):
         self.canvas.bind("<B1-Motion>", self.drag)
         side = tk.Frame(self, background=CARD)
         side.grid(row=1, column=1, sticky="nsew", padx=(0, 16))
-        tk.Label(side, text="已有轮播图（内置图也在这里）", background=CARD, foreground=GREEN,
+        tk.Label(side, text=tr("已有轮播图（内置图也在这里）"), background=CARD, foreground=GREEN,
                  font=(self.family, 10, "bold")).pack(padx=10, pady=10)
         holder = tk.Frame(side, background=CARD)
         holder.pack(fill="both", expand=True, padx=10)
@@ -176,19 +177,19 @@ class HeroCropPicker(tk.Toplevel):
         self.slots.pack(side="left", fill="both", expand=True)
         scroll.pack(side="right", fill="y")
         for i, photo in enumerate(self.gallery):
-            kind = "观鸟记录" if photo.get("user_record") else "内置"
-            self.slots.insert("", "end", iid=str(i), text=f"{kind} {i+1} · {photo.get('species_cn') or '未确认'}")
+            kind = tr("观鸟记录") if photo.get("user_record") else tr("内置")
+            self.slots.insert("", "end", iid=str(i), text=f"{kind} {i+1} · {photo.get('species_cn') or tr('未确认')}")
         self.slots.bind("<<TreeviewSelect>>", self.preview_slot)
         self.slot_preview = tk.Label(side, background=CARD)
         self.slot_preview.pack(padx=10, pady=8)
         controls = tk.Frame(self, background=PAPER)
         controls.grid(row=2, column=0, columnspan=2, sticky="ew", padx=16, pady=12)
-        tk.Label(controls, text="左侧拖动框选。替换只改轮播设置，原图和检测结果保留；每10秒自动轮播。",
+        tk.Label(controls, text=tr("左侧拖动框选。替换只改轮播设置，原图和检测结果保留；每10秒自动轮播。"),
                  background=PAPER, foreground=INK, font=(self.family, 9)).pack(anchor="w", pady=(0, 8))
-        for text, command in (("新增到轮播", lambda: self.commit(False)), ("替换右侧选中项", lambda: self.commit(True)),
-                              ("按鸟框重置", self.reset_crop), ("恢复选中的内置图", self.restore), ("取消", self.destroy)):
-            tk.Button(controls, text=text, command=command, background=GREEN if text == "新增到轮播" else CARD,
-                foreground="white" if text == "新增到轮播" else GREEN, relief="flat", padx=12, pady=8,
+        for text, command in ((tr("新增到轮播"), lambda: self.commit(False)), (tr("替换右侧选中项"), lambda: self.commit(True)),
+                              (tr("按鸟框重置"), self.reset_crop), (tr("恢复选中的内置图"), self.restore), (tr("取消"), self.destroy)):
+            tk.Button(controls, text=text, command=command, background=GREEN if text == tr("新增到轮播") else CARD,
+                foreground="white" if text == tr("新增到轮播") else GREEN, relief="flat", padx=12, pady=8,
                 font=(self.family, 10)).pack(side="left", padx=(0, 8))
         self.bind("<Escape>", lambda event: self.destroy())
         self.reset_crop()
@@ -246,7 +247,7 @@ class HeroCropPicker(tk.Toplevel):
     def commit(self, replace):
         selected = self.slots.selection()
         if replace and not selected:
-            messagebox.showinfo("先选替换对象", "在右侧选择一张轮播图，再点替换；也可以直接新增。", parent=self)
+            messagebox.showinfo(tr("先选替换对象"), tr("在右侧选择一张轮播图，再点替换；也可以直接新增。"), parent=self)
             return
         key = self.gallery[int(selected[0])]["gallery_id"] if replace else None
         try:
@@ -254,7 +255,7 @@ class HeroCropPicker(tk.Toplevel):
             self.on_saved(key)
             self.destroy()
         except Exception as exc:
-            messagebox.showerror("图片未保存", str(exc), parent=self)
+            messagebox.showerror(tr("图片未保存"), str(exc), parent=self)
 
     def restore(self):
         selected = self.slots.selection()
@@ -266,4 +267,4 @@ class HeroCropPicker(tk.Toplevel):
             self.on_saved(key)
             self.destroy()
         except Exception as exc:
-            messagebox.showinfo("无法恢复", str(exc), parent=self)
+            messagebox.showinfo(tr("无法恢复"), str(exc), parent=self)
