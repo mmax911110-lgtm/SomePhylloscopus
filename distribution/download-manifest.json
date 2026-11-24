@@ -1,0 +1,52 @@
+{
+  "file": "SomePhylloscopus-v0.1.0-Windows-NVIDIA.zip",
+  "bytes": 6093329218,
+  "sha256": "5f044a594a641399ff77438849e7225b93aad0612d6ae1d741ca8181670cd62c",
+  "parts": [
+    {
+      "file": "SomePhylloscopus-v0.1.0-Windows-NVIDIA.zip.part01a",
+      "bytes": 268435456,
+      "sha256": "0c341d5f5dc2820be383636159c3af929e6fedde9961f7baba86a049d71f73e7"
+    },
+    {
+      "file": "SomePhylloscopus-v0.1.0-Windows-NVIDIA.zip.part01b",
+      "bytes": 268435456,
+      "sha256": "2b555c224603331787bb0bc700739ee9fcae51c8bd13b4ffe64f163b13d3a22e"
+    },
+    {
+      "file": "SomePhylloscopus-v0.1.0-Windows-NVIDIA.zip.part01c",
+      "bytes": 268435456,
+      "sha256": "78bb376522881f0370861d3ecc2711c40f04f9190e5bef27d17177db197e1a6f"
+    },
+    {
+      "file": "SomePhylloscopus-v0.1.0-Windows-NVIDIA.zip.part01d",
+      "bytes": 268435456,
+      "sha256": "f5aa6568ebc96bf273254ccd074e858dc0009ebd27b838ebb0c4463d87c2665f"
+    },
+    {
+      "file": "SomePhylloscopus-v0.1.0-Windows-NVIDIA.zip.part01e",
+      "bytes": 268435456,
+      "sha256": "bf8d49cf3e5a394c15bee44039c578f0814940f36f64431399f496bd397dcb42"
+    },
+    {
+      "file": "SomePhylloscopus-v0.1.0-Windows-NVIDIA.zip.part01f",
+      "bytes": 268435456,
+      "sha256": "1600b47945709a5354377de3d2a72f14b41e78d935ed80d46c05136712d198b7"
+    },
+    {
+      "file": "SomePhylloscopus-v0.1.0-Windows-NVIDIA.zip.part02",
+      "bytes": 1610612736,
+      "sha256": "cbec393ef18ea3c1ea586e97848f9b93eb57626694ba55cd4e53f776beea5357"
+    },
+    {
+      "file": "SomePhylloscopus-v0.1.0-Windows-NVIDIA.zip.part03",
+      "bytes": 1610612736,
+      "sha256": "5380c0b25440d1c1e022bdbc7668b38e6c53e0cb12ac395bd819c3cf3ac5fbe7"
+    },
+    {
+      "file": "SomePhylloscopus-v0.1.0-Windows-NVIDIA.zip.part04",
+      "bytes": 1261491010,
+      "sha256": "d79b52b32672050b7c042dd98fb1e4506f66ad268502aaf3799d9ad7abc26644"
+    }
+  ]
+}

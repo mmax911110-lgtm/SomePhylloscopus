@@ -60,12 +60,18 @@
 
 ### 下哪一份
 
+新用户可下载 [Windows NVIDIA 安装向导](https://github.com/mmax911110-lgtm/SomePhylloscopus/releases/download/v0.1.0/SomePhylloscopus-v0.1.0-Windows-NVIDIA-Setup.exe)，选择目录后自动下载、校验、安装，并创建开始菜单入口。也可选择已有完整 ZIP 或分件文件夹；原下载文件会保留。安装期间建议所选磁盘留 **30 GB** 空间，完成后约 **10.1 GiB**。喜欢直接解压运行的用户仍可使用下方便携版下载器。
+
+![安装向导支持在线下载、已有完整 ZIP 和已有分件](docs/screenshots/installer-sources.png)
+
 | 用途 | 去哪下 | 里头有什么 |
 | --- | --- | --- |
 | 直接在 Windows 上用 | [GitHub Releases](https://github.com/mmax911110-lgtm/SomePhylloscopus/releases) 里的「Windows NVIDIA 便携版」链接 | 完整运行包，含 `柳莺识别.exe`、图鉴素材、识别权重和配套运行库。 |
 | 看代码或自己改 | GitHub **Code → Download ZIP** 或克隆仓库 | 源码、发布配置、文档和截图。想跑完整推理还得配对应版本的便携包。 |
 
 在 Release 页面下载 `Download-Windows-NVIDIA.cmd`，双击运行。它会下载全部分件、逐件校验，再生成一个完整 ZIP 并核对整包 SHA-256。GitHub 自动生成的 `Source code (zip)` 和 `Source code (tar.gz)` 包含仓库源码。[GitHub Releases 说明](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)
+
+**请勿单独解压 `.part01a`～`.part04`：它们是完整 ZIP 的二进制分件。** 将下载器放到空间充足的盘里运行，下载和临时文件会保存在同一目录。2026-11-24 修复版支持中断续传，也能校验并复用放在旁边的手动下载分件。遇到失败，保留 `.downloading` 文件并重新运行；生成完整 ZIP 后再解压。[下载问题与检查方法](docs/下载修复与安装向导.md)
 
 ### 电脑要求
 

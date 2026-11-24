@@ -60,12 +60,16 @@
 
 ### ダウンロードするファイル
 
+初めて使う場合は [Windows NVIDIA インストールウィザード](https://github.com/mmax911110-lgtm/SomePhylloscopus/releases/download/v0.1.0/SomePhylloscopus-v0.1.0-Windows-NVIDIA-Setup.exe) を利用できます。英語または簡体字中国語の画面で保存先を選ぶと、ダウンロード、検証、インストール、スタートメニューへの登録を行います。取得済みの完全な ZIP や分割ファイルも再利用でき、元ファイルは削除しません。インストール中は **30 GB** の空き容量を推奨し、完了後は約 **10.1 GiB** です。従来のポータブル版ダウンローダーも引き続き利用できます。
+
 | 目的 | 入手先 | 内容 |
 | --- | --- | --- |
 | Windows で使用する | [GitHub Releases](https://github.com/mmax911110-lgtm/SomePhylloscopus/releases) の **Windows NVIDIA ポータブル版** | `柳莺识别.exe`、図鑑素材、モデルの重み、ランタイムを含む一式です。 |
 | コードを読む・改変する | **Code → Download ZIP** またはリポジトリをクローン | ソース、公開設定、文書、画面画像です。識別の実行には対応するポータブル版一式が必要です。 |
 
 リリースページから `Download-Windows-NVIDIA.cmd` をダウンロードし、ダブルクリックします。分割ファイルをすべて取得・検証し、結合した ZIP 全体の SHA-256 を照合します。GitHub が自動生成する **Source code (zip)** と **Source code (tar.gz)** にはリポジトリのソースが収録されています。[GitHub Releases の説明](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)
+
+**`.part01a`〜`.part04` は一つの ZIP のバイナリ断片なので、個別には解凍できません。** 空き容量のあるドライブにダウンローダーを置いて実行すると、一時ファイルも同じフォルダーに保存されます。2026-11-24 修正版は中断した転送の再開と、手動で取得した分割ファイルの検証・再利用に対応しています。中断後は `.downloading` ファイルを残して再実行し、完成した ZIP を解凍してください。
 
 ### 動作環境
 

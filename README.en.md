@@ -60,12 +60,16 @@ To give the home screen some life, we let the little leaf warbler out from besid
 
 ### Which file to download
 
+New users can use the [Windows NVIDIA Setup wizard](https://github.com/mmax911110-lgtm/SomePhylloscopus/releases/download/v0.1.0/SomePhylloscopus-v0.1.0-Windows-NVIDIA-Setup.exe). Choose an installation folder, then let it download, verify, install, and create a Start menu shortcut. The wizard supports English and Simplified Chinese and can reuse a complete ZIP or a folder of parts while preserving those originals. Allow **30 GB** free during setup; the installed app uses about **10.1 GiB**. The portable downloader below remains available.
+
 | What you want to do | Where to get it | What it contains |
 | --- | --- | --- |
 | Run the app on Windows | **Windows NVIDIA portable edition** on [GitHub Releases](https://github.com/mmax911110-lgtm/SomePhylloscopus/releases) | The complete app, including `柳莺识别.exe`, field-guide media, model weights, and runtime libraries. |
 | Read or modify the code | **Code → Download ZIP**, or clone the repository | Source code, release configuration, documentation, and screenshots. Full inference requires the corresponding portable edition. |
 
 Download `Download-Windows-NVIDIA.cmd` from the release page and double-click it. It downloads and verifies the parts, assembles the complete ZIP, and checks its SHA-256. The automatically generated **Source code (zip)** and **Source code (tar.gz)** archives contain the repository source. [GitHub Releases documentation](https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases)
+
+**Do not extract `.part01a` through `.part04` individually: they are binary fragments of one ZIP.** Put the downloader on a drive with enough space; all temporary downloads stay beside it. The 2026-11-24 repair supports resuming interrupted transfers and reusing verified fragments you downloaded manually. Keep `.downloading` files after an interruption and run it again. Extract only the completed ZIP.
 
 ### System requirements
 
