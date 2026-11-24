@@ -60,7 +60,7 @@
 
 ### 下哪一份
 
-新用户可下载 [Windows NVIDIA 安装向导](https://github.com/mmax911110-lgtm/SomePhylloscopus/releases/download/v0.1.0/SomePhylloscopus-v0.1.0-Windows-NVIDIA-Setup.exe)，选择目录后自动下载、校验、安装，并创建开始菜单入口。也可选择已有完整 ZIP 或分件文件夹；原下载文件会保留。安装期间建议所选磁盘留 **30 GB** 空间，完成后约 **10.1 GiB**。喜欢直接解压运行的用户仍可使用下方便携版下载器。
+新用户可下载 [Windows NVIDIA 安装向导](https://github.com/mmax911110-lgtm/SomePhylloscopus/releases/download/v0.1.0/SomePhylloscopus-v0.1.0-Windows-NVIDIA-Setup.exe)，选择目录后自动下载、校验、安装，并创建开始菜单入口。也可选择已有完整 ZIP 或分件文件夹；原下载文件会保留。“创建桌面快捷方式”和“安装后打开”默认勾选，可自行取消。安装期间建议所选磁盘留 **30 GB** 空间，完成后约 **10.1 GiB**。喜欢直接解压运行的用户仍可使用下方便携版下载器。
 
 ![安装向导支持在线下载、已有完整 ZIP 和已有分件](docs/screenshots/installer-sources.png)
 

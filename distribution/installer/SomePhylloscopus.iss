@@ -9,6 +9,7 @@ DefaultDirName={localappdata}\Programs\SomePhylloscopus
 DefaultGroupName=SomePhylloscopus
 DisableProgramGroupPage=yes
 DisableWelcomePage=no
+UsePreviousTasks=no
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -23,7 +24,7 @@ UninstallDisplayIcon={app}\柳莺识别.exe
 CloseApplications=no
 RestartApplications=no
 ExtraDiskSpaceRequired=18000000000
-VersionInfoVersion=0.1.0.1
+VersionInfoVersion=0.1.0.2
 VersionInfoDescription=SomePhylloscopus Windows NVIDIA guided installer
 
 [Languages]
@@ -83,7 +84,7 @@ zhcn.RetryInfo=安装文件准备失败。进度已保留，可重新运行向�
 en.RetryInfo=Preparation failed. Progress is preserved; reopen Setup to continue.
 
 [Tasks]
-Name: "desktopicon"; Description: "{cm:Desktop}"; Flags: unchecked
+Name: "desktopicon"; Description: "{cm:Desktop}"
 
 [Files]
 Source: "prepare_payload.ps1"; Flags: dontcopy
@@ -104,6 +105,7 @@ Name: "{group}\某种柳莺"; Filename: "{app}\柳莺识别.exe"; WorkingDir: "{
 Name: "{autodesktop}\某种柳莺"; Filename: "{app}\柳莺识别.exe"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Run]
+; postinstall defaults to checked; keep the user free to uncheck it.
 Filename: "{app}\柳莺识别.exe"; WorkingDir: "{app}"; Description: "{cm:Launch}"; Flags: nowait postinstall skipifsilent
 
 [Code]

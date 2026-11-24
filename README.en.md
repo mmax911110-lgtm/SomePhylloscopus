@@ -60,7 +60,7 @@ To give the home screen some life, we let the little leaf warbler out from besid
 
 ### Which file to download
 
-New users can use the [Windows NVIDIA Setup wizard](https://github.com/mmax911110-lgtm/SomePhylloscopus/releases/download/v0.1.0/SomePhylloscopus-v0.1.0-Windows-NVIDIA-Setup.exe). Choose an installation folder, then let it download, verify, install, and create a Start menu shortcut. The wizard supports English and Simplified Chinese and can reuse a complete ZIP or a folder of parts while preserving those originals. Allow **30 GB** free during setup; the installed app uses about **10.1 GiB**. The portable downloader below remains available.
+New users can use the [Windows NVIDIA Setup wizard](https://github.com/mmax911110-lgtm/SomePhylloscopus/releases/download/v0.1.0/SomePhylloscopus-v0.1.0-Windows-NVIDIA-Setup.exe). Choose an installation folder, then let it download, verify, install, and create a Start menu shortcut. The wizard supports English and Simplified Chinese and can reuse a complete ZIP or a folder of parts while preserving those originals. Desktop shortcut creation and launching the app after setup are selected by default; you can uncheck either. Allow **30 GB** free during setup; the installed app uses about **10.1 GiB**. The portable downloader below remains available.
 
 | What you want to do | Where to get it | What it contains |
 | --- | --- | --- |
